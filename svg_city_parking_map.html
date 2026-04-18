@@ -1,0 +1,2063 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Smart Parking Map</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+*{box-sizing:border-box;margin:0;padding:0}
+
+:root{
+  --green:  #22c55e;
+  --yellow: #f59e0b;
+  --red:    #ef4444;
+  --blue:   #3b82f6;
+  --dark:   #0f1117;
+  --dark2:  #1a1d27;
+  --dark3:  #22263a;
+  --dark4:  #2d3250;
+  --text1:  #f1f5f9;
+  --text2:  #94a3b8;
+  --text3:  #64748b;
+  --border: rgba(255,255,255,0.07);
+}
+
+#shell{display:flex;height:720px;font-family:'Inter',sans-serif}
+
+/* ── Map ── */
+#map-container{flex:1;position:relative;overflow:hidden;background:#aecfa4}
+#map-svg{width:100%;height:100%;cursor:grab;display:block}
+#map-svg:active{cursor:grabbing}
+
+/* ── Sidebar ── */
+#sidebar{
+  width:240px;flex-shrink:0;
+  background:var(--dark);
+  border-left:1px solid var(--border);
+  display:flex;flex-direction:column;
+  padding:0;gap:0;overflow-y:auto;
+  scrollbar-width:thin;scrollbar-color:var(--dark4) transparent;
+}
+
+/* Header */
+#sb-header{
+  padding:18px 18px 14px;
+  background:linear-gradient(135deg,#1e2340 0%,#111827 100%);
+  border-bottom:1px solid var(--border);
+  position:sticky;top:0;z-index:10;
+}
+#sb-header h2{
+  font-size:15px;font-weight:700;color:var(--text1);
+  letter-spacing:.3px;display:flex;align-items:center;gap:8px;
+}
+#sb-header h2::before{content:'🅿';font-size:16px}
+#live-badge{
+  display:inline-flex;align-items:center;gap:5px;
+  margin-top:6px;font-size:10px;color:var(--green);font-weight:600;letter-spacing:.5px;
+}
+#live-badge::before{
+  content:'';width:6px;height:6px;border-radius:50%;background:var(--green);
+  animation:pulse-green 1.5s infinite;
+}
+@keyframes pulse-green{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(1.3)}}
+
+/* Stats row */
+#stats-row{
+  display:grid;grid-template-columns:1fr 1fr;gap:8px;
+  padding:14px 14px 0;
+}
+.stat-card{
+  background:var(--dark2);
+  border:1px solid var(--border);
+  border-radius:10px;padding:10px 12px;
+  transition:transform .15s;
+}
+.stat-card:hover{transform:translateY(-1px)}
+.stat-card.full{grid-column:1/-1}
+.stat-label{font-size:10px;color:var(--text3);font-weight:500;letter-spacing:.4px;text-transform:uppercase;margin-bottom:4px}
+.stat-value{font-size:22px;font-weight:700;line-height:1}
+.stat-value.green{color:var(--green)}
+.stat-value.yellow{color:var(--yellow)}
+.stat-value.red{color:var(--red)}
+.stat-value.white{color:var(--text1)}
+.stat-bar{height:3px;border-radius:2px;margin-top:7px;background:var(--dark3);overflow:hidden}
+.stat-bar-fill{height:100%;border-radius:2px;transition:width .6s ease}
+
+/* Divider */
+.sb-divider{height:1px;background:var(--border);margin:14px 14px 0}
+
+/* Section label */
+.sb-section{padding:12px 18px 6px;font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.8px;text-transform:uppercase}
+
+/* Buttons */
+.sb-btns{display:flex;flex-direction:column;gap:8px;padding:0 14px}
+
+#findbtn{
+  width:100%;padding:11px 14px;font-size:13px;font-weight:600;
+  background:linear-gradient(135deg,#3b82f6,#1d4ed8);
+  color:#fff;border:none;border-radius:10px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;gap:7px;
+  transition:all .2s;box-shadow:0 4px 14px rgba(59,130,246,.35);
+  font-family:'Inter',sans-serif;
+}
+#home-link{display:inline-flex;align-items:center;justify-content:center;padding:8px 14px;border-radius:999px;background:rgba(255,255,255,.06);color:#fff;text-decoration:none;font-size:0.95rem;font-weight:700;transition:background .2s;}
+#home-link:hover{background:rgba(255,255,255,.12);}
+#findbtn:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(59,130,246,.45)}
+#findbtn:active{transform:translateY(0)}
+#findbtn::before{content:'🔍';font-size:14px}
+
+#clearbtn{
+  width:100%;padding:9px 14px;font-size:12px;font-weight:500;
+  background:transparent;color:var(--text2);
+  border:1px solid var(--border);border-radius:10px;cursor:pointer;
+  transition:all .2s;font-family:'Inter',sans-serif;
+}
+#clearbtn:hover{background:var(--dark2);color:var(--text1)}
+
+#resetviewbtn{
+  width:100%;padding:9px 14px;font-size:12px;font-weight:500;
+  background:transparent;color:var(--text2);
+  border:1px solid var(--border);border-radius:10px;cursor:pointer;
+  transition:all .2s;font-family:'Inter',sans-serif;
+}
+#resetviewbtn:hover{background:var(--dark2);color:var(--text1)}
+
+#occupybtn{
+  display:none;width:100%;padding:11px 14px;font-size:13px;font-weight:600;
+  background:linear-gradient(135deg,#ef4444,#b91c1c);
+  color:#fff;border:none;border-radius:10px;cursor:pointer;
+  display:none;align-items:center;justify-content:center;gap:7px;
+  transition:all .2s;box-shadow:0 4px 14px rgba(239,68,68,.3);
+  font-family:'Inter',sans-serif;
+  animation:slideUp .25s ease;
+}
+#occupybtn:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(239,68,68,.4)}
+@keyframes slideUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+
+/* Info box */
+#infobox{
+  margin:0 14px;
+  background:var(--dark2);border:1px solid var(--border);
+  border-radius:10px;padding:12px 14px;
+  font-size:12px;color:var(--text2);line-height:1.8;min-height:62px;
+}
+#infobox strong{color:var(--text1);font-weight:600}
+#nomsg{font-size:11px;color:var(--red);font-weight:600;padding:0 14px;display:none}
+
+/* Drivers panel */
+#drivers-panel{margin:0 14px;background:var(--dark2);border:1px solid var(--border);border-radius:10px;padding:12px 14px}
+#drivers-panel .dp-title{font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.6px;text-transform:uppercase;margin-bottom:8px}
+#drivers-list{display:flex;flex-direction:column;gap:6px}
+.driver-row{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text2)}
+.driver-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;box-shadow:0 0 6px currentColor}
+.driver-status{margin-left:auto;font-size:10px;padding:2px 6px;border-radius:4px;font-weight:600}
+.driver-status.driving{background:rgba(59,130,246,.15);color:#60a5fa}
+.driver-status.parked{background:rgba(239,68,68,.15);color:#f87171}
+.driver-status.idle{background:rgba(148,163,184,.1);color:var(--text3)}
+
+/* Legend */
+#legend{margin:0 14px 14px;background:var(--dark2);border:1px solid var(--border);border-radius:10px;padding:12px 14px}
+#legend .lg-title{font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.6px;text-transform:uppercase;margin-bottom:8px}
+.li{display:flex;align-items:center;gap:9px;font-size:11px;color:var(--text2);padding:2px 0}
+.ld{width:14px;height:14px;border-radius:4px;flex-shrink:0}
+
+/* Spot elements */
+.spot-el{cursor:pointer;transition:opacity .25s,filter .25s}
+.spot-el:hover{opacity:.8;filter:brightness(1.15)}
+
+/* Scrollbar */
+#sidebar::-webkit-scrollbar{width:4px}
+#sidebar::-webkit-scrollbar-track{background:transparent}
+#sidebar::-webkit-scrollbar-thumb{background:var(--dark4);border-radius:2px}
+</style>
+
+<div id="shell">
+<div id="map-container">
+<svg id="map-svg" viewBox="0 0 900 720" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
+<defs>
+  <filter id="blur-sm">
+    <feGaussianBlur stdDeviation="1"/>
+  </filter>
+</defs>
+
+<!-- === GROUND / WATER BASE === -->
+<rect x="0" y="0" width="900" height="720" fill="#aecfa4"/>
+
+<!-- Water body top-left -->
+<path d="M0,0 L180,0 L160,80 L120,120 L0,140 Z" fill="#7ab8d4"/>
+<!-- Water body bottom-right -->
+<path d="M900,580 L900,720 L650,720 L610,660 L700,600 Z" fill="#7ab8d4"/>
+<!-- Park area center-left -->
+<ellipse cx="155" cy="350" rx="80" ry="55" fill="#8bbe7e"/>
+<ellipse cx="200" cy="380" rx="50" ry="35" fill="#7ab36d"/>
+<!-- Small park bottom-left -->
+<rect x="30" y="560" width="110" height="80" rx="12" fill="#8bbe7e"/>
+
+<!-- === LAND BLOCKS (city blocks) === -->
+<!-- Top-left block cluster -->
+<rect x="200" y="30" width="130" height="95" rx="6" fill="#e8e2d4"/>
+<rect x="350" y="30" width="140" height="95" rx="6" fill="#ede8dc"/>
+<rect x="510" y="30" width="120" height="95" rx="6" fill="#e8e2d4"/>
+<rect x="650" y="30" width="220" height="95" rx="6" fill="#ede8dc"/>
+
+<!-- Mid-top blocks -->
+<rect x="200" y="155" width="120" height="100" rx="6" fill="#ede8dc"/>
+<rect x="510" y="155" width="120" height="100" rx="6" fill="#e8e2d4"/>
+<rect x="650" y="155" width="220" height="100" rx="6" fill="#ede8dc"/>
+
+<!-- Right column blocks -->
+<rect x="760" y="285" width="110" height="120" rx="6" fill="#e8e2d4"/>
+<rect x="760" y="425" width="110" height="110" rx="6" fill="#ede8dc"/>
+
+<!-- Center blocks -->
+<rect x="350" y="155" width="140" height="100" rx="6" fill="#e8e2d4"/>
+<rect x="270" y="285" width="160" height="120" rx="6" fill="#ede8dc"/>
+<rect x="460" y="285" width="160" height="120" rx="6" fill="#e8e2d4"/>
+<rect x="650" y="285" width="90" height="120" rx="6" fill="#ede8dc"/>
+
+<!-- Bottom row blocks -->
+<rect x="200" y="435" width="160" height="115" rx="6" fill="#e8e2d4"/>
+<rect x="270" y="570" width="140" height="110" rx="6" fill="#ede8dc"/>
+<rect x="460" y="435" width="160" height="115" rx="6" fill="#e8e2d4"/>
+<rect x="460" y="570" width="160" height="110" rx="6" fill="#ede8dc"/>
+<rect x="650" y="435" width="90" height="115" rx="6" fill="#e8e2d4"/>
+<rect x="650" y="570" width="90" height="110" rx="6" fill="#ede8dc"/>
+
+<!-- === BUILDING DETAILS (inner subdivisions) === -->
+<g opacity="0.22" stroke="#9a8e7a" stroke-width="0.8" fill="none">
+  <rect x="210" y="40" width="50" height="35" rx="2"/>
+  <rect x="270" y="40" width="50" height="35" rx="2"/>
+  <rect x="210" y="82" width="50" height="35" rx="2"/>
+  <rect x="270" y="82" width="50" height="35" rx="2"/>
+  <rect x="360" y="40" width="55" height="38" rx="2"/>
+  <rect x="422" y="40" width="55" height="38" rx="2"/>
+  <rect x="360" y="85" width="55" height="32" rx="2"/>
+  <rect x="522" y="40" width="48" height="38" rx="2"/>
+  <rect x="522" y="85" width="48" height="32" rx="2"/>
+  <rect x="660" y="40" width="60" height="38" rx="2"/>
+  <rect x="726" y="40" width="60" height="38" rx="2"/>
+  <rect x="800" y="40" width="60" height="38" rx="2"/>
+  <rect x="280" y="295" width="60" height="40" rx="2"/>
+  <rect x="348" y="295" width="60" height="40" rx="2"/>
+  <rect x="280" y="342" width="60" height="55" rx="2"/>
+  <rect x="470" y="295" width="60" height="40" rx="2"/>
+  <rect x="538" y="295" width="60" height="40" rx="2"/>
+  <rect x="210" y="445" width="60" height="45" rx="2"/>
+  <rect x="278" y="445" width="60" height="45" rx="2"/>
+  <rect x="210" y="496" width="60" height="46" rx="2"/>
+  <rect x="278" y="496" width="60" height="46" rx="2"/>
+  <rect x="470" y="445" width="60" height="45" rx="2"/>
+  <rect x="538" y="445" width="60" height="45" rx="2"/>
+</g>
+
+<!-- === ROAD NETWORK === -->
+<!-- Road color: dark asphalt -->
+<g fill="#555e66">
+
+<!-- Horizontal: top edge road y=0..30 -->
+<rect x="0" y="0" width="900" height="30" fill="#4a5259"/>
+
+<!-- Horizontal main road 1: y=125..155 -->
+<rect x="0" y="125" width="900" height="30" fill="#4a5259"/>
+
+<!-- Horizontal main road 2: y=255..285 -->
+<rect x="0" y="255" width="900" height="30" fill="#4a5259"/>
+
+<!-- Horizontal main road 3: y=405..435 -->
+<rect x="0" y="405" width="900" height="30" fill="#4a5259"/>
+
+<!-- Horizontal main road 4: y=545..570 -->
+<rect x="0" y="545" width="900" height="28" fill="#4a5259"/>
+
+<!-- Horizontal bottom road -->
+<rect x="0" y="690" width="900" height="30" fill="#4a5259"/>
+
+<!-- Vertical main road 1: x=170..200 -->
+<rect x="170" y="0" width="30" height="720" fill="#4a5259"/>
+
+<!-- Vertical main road 2: x=430..460 -->
+<rect x="430" y="0" width="30" height="720" fill="#4a5259"/>
+
+<!-- Vertical main road 3: x=620..650 -->
+<rect x="620" y="0" width="30" height="720" fill="#4a5259"/>
+
+<!-- Vertical main road 4: x=750..780 (right side) -->
+<rect x="750" y="0" width="28" height="720" fill="#4a5259"/>
+
+<!-- Vertical left edge road -->
+<rect x="0" y="0" width="30" height="720" fill="#4a5259"/>
+</g>
+
+<!-- === LANE MARKINGS === -->
+<g stroke="#ffffff" stroke-opacity="0.45" fill="none">
+  <!-- Center dashes on horizontal roads -->
+  <!-- y=140 center line -->
+  <line x1="0" y1="140" x2="170" y2="140" stroke-width="1.5" stroke-dasharray="18,12"/>
+  <line x1="200" y1="140" x2="430" y2="140" stroke-width="1.5" stroke-dasharray="18,12"/>
+  <line x1="460" y1="140" x2="620" y2="140" stroke-width="1.5" stroke-dasharray="18,12"/>
+  <line x1="650" y1="140" x2="750" y2="140" stroke-width="1.5" stroke-dasharray="18,12"/>
+  <line x1="778" y1="140" x2="900" y2="140" stroke-width="1.5" stroke-dasharray="18,12"/>
+
+  <!-- y=270 -->
+  <line x1="0" y1="270" x2="170" y2="270" stroke-width="1.5" stroke-dasharray="18,12"/>
+  <line x1="200" y1="270" x2="430" y2="270" stroke-width="1.5" stroke-dasharray="18,12"/>
+  <line x1="460" y1="270" x2="620" y2="270" stroke-width="1.5" stroke-dasharray="18,12"/>
+  <line x1="650" y1="270" x2="750" y2="270" stroke-width="1.5" stroke-dasharray="18,12"/>
+  <line x1="778" y1="270" x2="900" y2="270" stroke-width="1.5" stroke-dasharray="18,12"/>
+
+  <!-- y=420 -->
+  <line x1="0" y1="420" x2="170" y2="420" stroke-width="1.5" stroke-dasharray="18,12"/>
+  <line x1="200" y1="420" x2="430" y2="420" stroke-width="1.5" stroke-dasharray="18,12"/>
+  <line x1="460" y1="420" x2="620" y2="420" stroke-width="1.5" stroke-dasharray="18,12"/>
+  <line x1="650" y1="420" x2="750" y2="420" stroke-width="1.5" stroke-dasharray="18,12"/>
+  <line x1="778" y1="420" x2="900" y2="420" stroke-width="1.5" stroke-dasharray="18,12"/>
+
+  <!-- y=559 -->
+  <line x1="0" y1="559" x2="170" y2="559" stroke-width="1.5" stroke-dasharray="18,12"/>
+  <line x1="200" y1="559" x2="430" y2="559" stroke-width="1.5" stroke-dasharray="18,12"/>
+  <line x1="460" y1="559" x2="620" y2="559" stroke-width="1.5" stroke-dasharray="18,12"/>
+  <line x1="650" y1="559" x2="750" y2="559" stroke-width="1.5" stroke-dasharray="18,12"/>
+  <line x1="778" y1="559" x2="900" y2="559" stroke-width="1.5" stroke-dasharray="18,12"/>
+
+  <!-- Center dashes on vertical roads -->
+  <!-- x=185 -->
+  <line x1="185" y1="30" x2="185" y2="125" stroke-width="1.5" stroke-dasharray="18,12"/>
+  <line x1="185" y1="155" x2="185" y2="255" stroke-width="1.5" stroke-dasharray="18,12"/>
+  <line x1="185" y1="285" x2="185" y2="405" stroke-width="1.5" stroke-dasharray="18,12"/>
+  <line x1="185" y1="435" x2="185" y2="545" stroke-width="1.5" stroke-dasharray="18,12"/>
+  <line x1="185" y1="573" x2="185" y2="690" stroke-width="1.5" stroke-dasharray="18,12"/>
+
+  <!-- x=445 -->
+  <line x1="445" y1="30" x2="445" y2="125" stroke-width="1.5" stroke-dasharray="18,12"/>
+  <line x1="445" y1="155" x2="445" y2="255" stroke-width="1.5" stroke-dasharray="18,12"/>
+  <line x1="445" y1="285" x2="445" y2="405" stroke-width="1.5" stroke-dasharray="18,12"/>
+  <line x1="445" y1="435" x2="445" y2="545" stroke-width="1.5" stroke-dasharray="18,12"/>
+  <line x1="445" y1="573" x2="445" y2="690" stroke-width="1.5" stroke-dasharray="18,12"/>
+
+  <!-- x=635 -->
+  <line x1="635" y1="30" x2="635" y2="125" stroke-width="1.5" stroke-dasharray="18,12"/>
+  <line x1="635" y1="155" x2="635" y2="255" stroke-width="1.5" stroke-dasharray="18,12"/>
+  <line x1="635" y1="285" x2="635" y2="405" stroke-width="1.5" stroke-dasharray="18,12"/>
+  <line x1="635" y1="435" x2="635" y2="545" stroke-width="1.5" stroke-dasharray="18,12"/>
+  <line x1="635" y1="573" x2="635" y2="690" stroke-width="1.5" stroke-dasharray="18,12"/>
+
+  <!-- x=764 -->
+  <line x1="764" y1="30" x2="764" y2="125" stroke-width="1.5" stroke-dasharray="18,12"/>
+  <line x1="764" y1="155" x2="764" y2="255" stroke-width="1.5" stroke-dasharray="18,12"/>
+  <line x1="764" y1="285" x2="764" y2="405" stroke-width="1.5" stroke-dasharray="18,12"/>
+  <line x1="764" y1="435" x2="764" y2="545" stroke-width="1.5" stroke-dasharray="18,12"/>
+  <line x1="764" y1="573" x2="764" y2="690" stroke-width="1.5" stroke-dasharray="18,12"/>
+</g>
+
+<!-- === INTERSECTION highlights === -->
+<g fill="#3e464d">
+  <rect x="170" y="125" width="30" height="30"/>
+  <rect x="170" y="255" width="30" height="30"/>
+  <rect x="170" y="405" width="30" height="30"/>
+  <rect x="170" y="545" width="30" height="28"/>
+  <rect x="430" y="125" width="30" height="30"/>
+  <rect x="430" y="255" width="30" height="30"/>
+  <rect x="430" y="405" width="30" height="30"/>
+  <rect x="430" y="545" width="30" height="28"/>
+  <rect x="620" y="125" width="30" height="30"/>
+  <rect x="620" y="255" width="30" height="30"/>
+  <rect x="620" y="405" width="30" height="30"/>
+  <rect x="620" y="545" width="30" height="28"/>
+  <rect x="750" y="125" width="28" height="30"/>
+  <rect x="750" y="255" width="28" height="30"/>
+  <rect x="750" y="405" width="28" height="30"/>
+  <rect x="750" y="545" width="28" height="28"/>
+</g>
+
+<!-- === ROAD LABELS === -->
+<g fill="#c8cfd4" font-size="9" font-family="sans-serif" font-weight="500" opacity="0.85">
+  <text x="300" y="138" text-anchor="middle">Oak Avenue</text>
+  <text x="540" y="138" text-anchor="middle">Oak Avenue</text>
+  <text x="300" y="268" text-anchor="middle">Maple Street</text>
+  <text x="540" y="268" text-anchor="middle">Maple Street</text>
+  <text x="300" y="418" text-anchor="middle">Elm Boulevard</text>
+  <text x="540" y="418" text-anchor="middle">Elm Boulevard</text>
+  <text x="300" y="558" text-anchor="middle">Pine Road</text>
+  <text x="540" y="558" text-anchor="middle">Pine Road</text>
+  <text transform="translate(188,200) rotate(-90)" text-anchor="middle">1st Ave</text>
+  <text transform="translate(448,200) rotate(-90)" text-anchor="middle">2nd Ave</text>
+  <text transform="translate(638,340) rotate(-90)" text-anchor="middle">3rd Ave</text>
+  <text transform="translate(768,340) rotate(-90)" text-anchor="middle">4th Ave</text>
+</g>
+
+<!-- === OTHER DRIVERS LAYER === -->
+<g id="drivers-layer"></g>
+
+<!-- === PATH LAYER (drawn by JS) === -->
+<g id="path-layer"></g>
+
+<!-- === PARKING SPOTS LAYER === -->
+<g id="spots-layer"></g>
+
+<!-- === PEDESTRIAN LAYER === -->
+<g id="ped-layer"></g>
+
+<!-- === DESTINATION BUILDINGS (clickable, shown after parking) === -->
+<g id="buildings-layer" style="display:none">
+  <!-- pulse rings on each building entrance, drawn by JS -->
+</g>
+
+<!-- === USER MARKER === -->
+<g id="user-marker">
+  <circle cx="185" cy="559" r="16" fill="#1a6faf" opacity="0.18"/>
+  <circle cx="185" cy="559" r="9" fill="#1a6faf"/>
+  <circle cx="185" cy="559" r="3.5" fill="white"/>
+  <text x="185" y="543" text-anchor="middle" font-size="9" font-weight="500" fill="#1d4ed8" font-family="sans-serif">You</text>
+</g>
+
+<g id="car" visibility="hidden">
+  <!-- Car body -->
+  <rect x="-8" y="-5" width="16" height="10" rx="3" fill="#FFD54F" stroke="#333" stroke-width="1.2"/>
+  <!-- Car roof/cabin -->
+  <rect x="-5" y="-8" width="9" height="5" rx="2" fill="#FFC107" stroke="#333" stroke-width="1"/>
+  <!-- Front headlights -->
+  <circle cx="8" cy="-2.5" r="1.5" fill="#fff" opacity="0.9"/>
+  <circle cx="8" cy="2.5" r="1.5" fill="#fff" opacity="0.9"/>
+  <!-- Rear lights -->
+  <circle cx="-8" cy="-2.5" r="1.2" fill="#f44" opacity="0.85"/>
+  <circle cx="-8" cy="2.5" r="1.2" fill="#f44" opacity="0.85"/>
+</g>
+
+<!-- === TOOLTIP === -->
+<g id="tooltip" opacity="0">
+  <rect id="tt-bg" x="0" y="0" width="104" height="46" rx="6" fill="#1e2430"/>
+  <text id="tt-name" x="0" y="0" font-size="10" font-weight="500" fill="white" font-family="sans-serif"/>
+  <text id="tt-status" x="0" y="0" font-size="10" fill="white" font-family="sans-serif"/>
+  <text id="tt-price" x="0" y="0" font-size="9" fill="#94a3b8" font-family="sans-serif"/>
+  <polygon id="tt-arrow" points="0,0 8,0 4,6" fill="#1e2430"/>
+</g>
+</svg>
+</div>
+
+<div id="sidebar">
+
+  <!-- Header -->
+  <div id="sb-header">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+      <h2>Smart Parking</h2>
+      <a href="index.html" id="home-link">Home</a>
+    </div>
+    <div id="live-badge">LIVE</div>
+  </div>
+
+  <!-- Stats Grid -->
+  <div id="stats-row">
+    <div class="stat-card full">
+      <div class="stat-label">Total Spots</div>
+      <div class="stat-value white" id="s-total">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Available</div>
+      <div class="stat-value green" id="s-avail">0</div>
+      <div class="stat-bar"><div class="stat-bar-fill" id="avail-bar" style="background:var(--green);width:0%"></div></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Occupied</div>
+      <div class="stat-value red" id="s-occ">0</div>
+    </div>
+    <div class="stat-card full">
+      <div class="stat-label">Reserved by drivers</div>
+      <div class="stat-value yellow" id="s-res">0</div>
+    </div>
+  </div>
+
+  <div class="sb-divider"></div>
+  <div class="sb-section">Actions</div>
+  <div class="sb-btns">
+    <button id="findbtn">Find Best Parking</button>
+    <button id="clearbtn">✕ Clear Path</button>
+    <button id="occupybtn">🔖 Reserve Parking</button>
+    <button id="resetviewbtn">🗺 Reset View</button>
+  </div>
+
+  <div class="sb-divider"></div>
+  <div class="sb-section">Selected Spot</div>
+  <div id="infobox">Click a spot on the map to begin.</div>
+  <div id="nomsg"></div>
+
+  <div class="sb-divider"></div>
+  <div class="sb-section">Other Drivers</div>
+  <div id="drivers-panel">
+    <div id="drivers-list"></div>
+  </div>
+
+  <div class="sb-divider"></div>
+  <div class="sb-section">Pricing Zones</div>
+  <div id="legend">
+    <div class="li"><div class="ld" style="background:#4a5259"></div>Road</div>
+    <div class="li"><div class="ld" style="background:#e8e2d4"></div>City block</div>
+    <div class="li"><div class="ld" style="background:#22c55e"></div>Free</div>
+    <div class="li"><div class="ld" style="background:#f59e0b"></div>Reserved</div>
+    <div class="li"><div class="ld" style="background:#ef4444"></div>Occupied</div>
+    <div class="li"><div class="ld" style="background:#3b82f6;border-radius:50%"></div>You</div>
+    <div class="li"><div class="ld" style="background:#3b82f6"></div>Suggested path</div>
+  </div>
+  <div style="margin:0 14px 6px;background:var(--dark2);border:1px solid var(--border);border-radius:10px;padding:10px 14px">
+    <div style="font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.6px;text-transform:uppercase;margin-bottom:8px">Rate / hr by zone</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px 10px;font-size:11px;color:var(--text2)">
+      <span>Zone A (Oak)</span><span style="color:#f59e0b;font-weight:600">$4.00</span>
+      <span>Zone B (Maple)</span><span style="color:#f59e0b;font-weight:600">$3.50</span>
+      <span>Zone C (Elm)</span><span style="color:#22c55e;font-weight:600">$3.00</span>
+      <span>Zone D (Pine)</span><span style="color:#22c55e;font-weight:600">$2.50</span>
+      <span>Zone E–F (1st–2nd)</span><span style="color:#22c55e;font-weight:600">$2.00</span>
+      <span>Zone G–H (3rd–4th)</span><span style="color:#22c55e;font-weight:600">$2.50–3.00</span>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- ═══ RESERVATION FORM MODAL ═══ -->
+<div id="reserve-modal" style="display:none;position:fixed;inset:0;z-index:999;background:rgba(0,0,0,0.65);backdrop-filter:blur(6px);align-items:center;justify-content:center;">
+  <div style="background:#1a1d27;border:1px solid rgba(255,255,255,0.1);border-radius:20px;padding:36px 36px 28px;box-shadow:0 28px 70px rgba(0,0,0,0.65);max-width:360px;width:92%;animation:popIn .3s cubic-bezier(.34,1.56,.64,1);font-family:'Inter',sans-serif;">
+
+    <!-- Header -->
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:24px">
+      <div style="width:48px;height:48px;background:linear-gradient(135deg,#f59e0b,#d97706);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">🔖</div>
+      <div>
+        <div style="font-size:17px;font-weight:700;color:#f1f5f9">Reserve Parking</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:3px">
+          <div id="rm-spot-label" style="font-size:12px;color:#f59e0b;font-weight:600">Spot —</div>
+          <div style="width:4px;height:4px;border-radius:50%;background:#64748b"></div>
+          <div id="rm-spot-price" style="font-size:12px;color:#22c55e;font-weight:600">—</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Name field -->
+    <div style="margin-bottom:16px">
+      <label style="display:block;font-size:11px;font-weight:600;color:#64748b;letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px">Your Name</label>
+      <input id="rm-name" type="text" placeholder="e.g. John Smith" maxlength="30"
+        style="width:100%;padding:11px 14px;background:#22263a;border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:#f1f5f9;font-size:13px;font-family:'Inter',sans-serif;outline:none;transition:border .2s"
+        onfocus="this.style.borderColor='#f59e0b'" onblur="this.style.borderColor='rgba(255,255,255,0.1)'"/>
+      <div id="rm-name-err" style="display:none;font-size:11px;color:#ef4444;margin-top:5px">Please enter your name.</div>
+    </div>
+
+    <!-- Duration field -->
+    <div style="margin-bottom:24px">
+      <label style="display:block;font-size:11px;font-weight:600;color:#64748b;letter-spacing:.5px;text-transform:uppercase;margin-bottom:8px">Parking Duration</label>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:7px" id="rm-duration-grid">
+        <button class="dur-btn" data-val="30">30 min</button>
+        <button class="dur-btn" data-val="60">1 hr</button>
+        <button class="dur-btn" data-val="120">2 hr</button>
+        <button class="dur-btn" data-val="180">3 hr</button>
+        <button class="dur-btn" data-val="240">4 hr</button>
+        <button class="dur-btn" data-val="300">5 hr</button>
+        <button class="dur-btn" data-val="480">8 hr</button>
+        <button class="dur-btn" data-val="custom">Custom</button>
+      </div>
+      <input id="rm-custom-input" type="number" min="1" max="1440" placeholder="Minutes" style="display:none;margin-top:10px;width:100%;padding:10px 14px;background:#22263a;border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:#f1f5f9;font-size:13px;font-family:'Inter',sans-serif;outline:none"/>
+      <div id="rm-dur-err" style="display:none;font-size:11px;color:#ef4444;margin-top:5px">Please select a duration.</div>
+    </div>
+
+    <!-- Actions -->
+    <div style="display:flex;gap:10px">
+      <button id="rm-cancel" style="flex:1;padding:12px;background:rgba(255,255,255,0.06);color:#94a3b8;border:1px solid rgba(255,255,255,0.08);border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;transition:all .2s">Cancel</button>
+      <button id="rm-confirm" style="flex:2;padding:12px;background:linear-gradient(135deg,#f59e0b,#d97706);color:#1a1207;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;transition:all .2s;box-shadow:0 4px 14px rgba(245,158,11,.35)">Confirm Reservation</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ RESERVATION CONFIRMED POPUP ═══ -->
+<div id="occupy-popup" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.65);backdrop-filter:blur(6px);align-items:center;justify-content:center;">
+  <div style="background:#1a1d27;border:1px solid rgba(255,255,255,0.1);border-radius:20px;padding:36px 40px;text-align:center;box-shadow:0 28px 70px rgba(0,0,0,0.65);max-width:340px;width:92%;animation:popIn .3s cubic-bezier(.34,1.56,.64,1);font-family:'Inter',sans-serif;">
+    <div style="width:60px;height:60px;background:linear-gradient(135deg,#f59e0b,#d97706);border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:28px;margin:0 auto 18px">🔖</div>
+    <div style="font-size:19px;font-weight:700;color:#f1f5f9;margin-bottom:6px">Spot Reserved!</div>
+    <div id="popup-label" style="font-size:13px;color:#94a3b8;margin-bottom:6px;line-height:1.7">—</div>
+    <div id="popup-timer-label" style="font-size:12px;color:#f59e0b;font-weight:600;margin-bottom:4px">—</div>
+    <div id="popup-cost" style="font-size:12px;color:#22c55e;font-weight:600;margin-bottom:24px">—</div>
+    <div style="display:flex;gap:10px;justify-content:center">
+      <button id="popup-close" style="padding:12px 20px;background:rgba(255,255,255,0.07);color:#94a3b8;border:1px solid rgba(255,255,255,0.1);border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif">Dismiss</button>
+      <button id="goto-btn" style="padding:12px 20px;background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;box-shadow:0 4px 14px rgba(34,197,94,.3)">📍 Go to Destination</button>
+    </div>
+  </div>
+</div>
+
+<style>
+@keyframes popIn{from{transform:scale(.75);opacity:0}to{transform:scale(1);opacity:1}}
+.dur-btn{
+  padding:8px 4px;background:#22263a;color:#94a3b8;border:1px solid rgba(255,255,255,0.08);
+  border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;
+  transition:all .18s;
+}
+.dur-btn:hover{background:#2d3250;color:#f1f5f9}
+.dur-btn.selected{background:rgba(245,158,11,.18);color:#f59e0b;border-color:#f59e0b}
+</style>
+
+
+<script>
+const NS = 'http://www.w3.org/2000/svg';
+const svg = document.getElementById('map-svg');
+
+// Parking spot definitions: placed along road edges at precise SVG coordinates
+// side: 'h-top' = above H road, 'h-bot' = below H road, 'v-left' = left of V road, 'v-right' = right
+const SPOT_DEFS = [
+  // Oak Ave (y=125..155) — top edge (y≈114) & bottom edge (y≈156)
+  {id:0, x:245, y:114, w:18, h:10, rx:2, label:'A1'},
+  {id:1, x:275, y:114, w:18, h:10, rx:2, label:'A2'},
+  {id:2, x:310, y:114, w:18, h:10, rx:2, label:'A3'},
+  {id:3, x:370, y:157, w:18, h:10, rx:2, label:'A4'},
+  {id:4, x:405, y:157, w:18, h:10, rx:2, label:'A5'},
+  {id:5, x:480, y:114, w:18, h:10, rx:2, label:'A6'},
+  {id:6, x:520, y:114, w:18, h:10, rx:2, label:'A7'},
+  {id:7, x:560, y:114, w:18, h:10, rx:2, label:'A8'},
+  {id:8, x:660, y:157, w:18, h:10, rx:2, label:'A9'},
+  {id:9, x:700, y:157, w:18, h:10, rx:2, label:'A10'},
+  {id:10, x:800, y:114, w:18, h:10, rx:2, label:'A11'},
+  {id:11, x:840, y:114, w:18, h:10, rx:2, label:'A12'},
+
+  // Maple St (y=255..285) — top & bottom
+  {id:12, x:220, y:244, w:18, h:10, rx:2, label:'B1'},
+  {id:13, x:250, y:244, w:18, h:10, rx:2, label:'B2'},
+  {id:14, x:290, y:244, w:18, h:10, rx:2, label:'B3'},
+  {id:15, x:350, y:244, w:18, h:10, rx:2, label:'B4'},
+  {id:16, x:380, y:244, w:18, h:10, rx:2, label:'B5'},
+  {id:17, x:480, y:287, w:18, h:10, rx:2, label:'B6'},
+  {id:18, x:520, y:287, w:18, h:10, rx:2, label:'B7'},
+  {id:19, x:560, y:287, w:18, h:10, rx:2, label:'B8'},
+  {id:20, x:660, y:244, w:18, h:10, rx:2, label:'B9'},
+  {id:21, x:700, y:244, w:18, h:10, rx:2, label:'B10'},
+  {id:22, x:800, y:287, w:18, h:10, rx:2, label:'B11'},
+
+  // Elm Blvd (y=405..435) — top & bottom
+  {id:23, x:215, y:394, w:18, h:10, rx:2, label:'C1'},
+  {id:24, x:255, y:394, w:18, h:10, rx:2, label:'C2'},
+  {id:25, x:295, y:394, w:18, h:10, rx:2, label:'C3'},
+  {id:26, x:350, y:437, w:18, h:10, rx:2, label:'C4'},
+  {id:27, x:480, y:394, w:18, h:10, rx:2, label:'C5'},
+  {id:28, x:530, y:437, w:18, h:10, rx:2, label:'C6'},
+  {id:29, x:570, y:437, w:18, h:10, rx:2, label:'C7'},
+  {id:30, x:660, y:394, w:18, h:10, rx:2, label:'C8'},
+  {id:31, x:800, y:437, w:18, h:10, rx:2, label:'C9'},
+  {id:32, x:840, y:437, w:18, h:10, rx:2, label:'C10'},
+
+  // Pine Rd (y=545..573) — top & bottom
+  {id:33, x:225, y:534, w:18, h:10, rx:2, label:'D1'},
+  {id:34, x:260, y:534, w:18, h:10, rx:2, label:'D2'},
+  {id:35, x:360, y:534, w:18, h:10, rx:2, label:'D3'},
+  {id:36, x:395, y:534, w:18, h:10, rx:2, label:'D4'},
+  {id:37, x:480, y:575, w:18, h:10, rx:2, label:'D5'},
+  {id:38, x:520, y:575, w:18, h:10, rx:2, label:'D6'},
+  {id:39, x:660, y:534, w:18, h:10, rx:2, label:'D7'},
+  {id:40, x:700, y:534, w:18, h:10, rx:2, label:'D8'},
+
+  // Along 1st Ave (x=170..200) — left & right
+  {id:41, x:158, y:170, w:10, h:18, rx:2, label:'E1'},
+  {id:42, x:202, y:170, w:10, h:18, rx:2, label:'E2'},
+  {id:43, x:158, y:310, w:10, h:18, rx:2, label:'E3'},
+  {id:44, x:202, y:310, w:10, h:18, rx:2, label:'E4'},
+  {id:45, x:158, y:460, w:10, h:18, rx:2, label:'E5'},
+  {id:46, x:202, y:460, w:10, h:18, rx:2, label:'E6'},
+
+  // Along 2nd Ave (x=430..460)
+  {id:47, x:418, y:180, w:10, h:18, rx:2, label:'F1'},
+  {id:48, x:462, y:180, w:10, h:18, rx:2, label:'F2'},
+  {id:49, x:418, y:320, w:10, h:18, rx:2, label:'F3'},
+  {id:50, x:462, y:320, w:10, h:18, rx:2, label:'F4'},
+  {id:51, x:418, y:460, w:10, h:18, rx:2, label:'F5'},
+  {id:52, x:462, y:460, w:10, h:18, rx:2, label:'F6'},
+
+  // Along 3rd Ave (x=620..650)
+  {id:53, x:608, y:180, w:10, h:18, rx:2, label:'G1'},
+  {id:54, x:652, y:180, w:10, h:18, rx:2, label:'G2'},
+  {id:55, x:608, y:340, w:10, h:18, rx:2, label:'G3'},
+  {id:56, x:608, y:470, w:10, h:18, rx:2, label:'G4'},
+
+  // Along 4th Ave (x=750..778)
+  {id:57, x:738, y:180, w:10, h:18, rx:2, label:'H1'},
+  {id:58, x:782, y:180, w:10, h:18, rx:2, label:'H2'},
+  {id:59, x:738, y:340, w:10, h:18, rx:2, label:'H3'},
+  {id:60, x:738, y:470, w:10, h:18, rx:2, label:'H4'},
+];
+
+// Price per hour by zone (label prefix)
+const ZONE_PRICE = { A:4.0, B:3.5, C:3.0, D:2.5, E:2.0, F:2.0, G:2.5, H:3.0 };
+function spotPrice(label){ return ZONE_PRICE[label[0]] ?? 2.0; }
+
+// State: available=true(green), reserved=true+available=false(yellow), available=false(red)
+let spots = SPOT_DEFS.map(s=>({...s, available: Math.random()>0.44, reserved: false, expiresAt: null}));
+let selectedId = null;
+let pathEl = null;
+
+const spotsLayer = document.getElementById('spots-layer');
+const pathLayer = document.getElementById('path-layer');
+const tooltip = document.getElementById('tooltip');
+const ttBg = document.getElementById('tt-bg');
+const ttName = document.getElementById('tt-name');
+const ttStatus = document.getElementById('tt-status');
+const ttArrow = document.getElementById('tt-arrow');
+const car = document.getElementById('car');
+let carAnimationId = null;
+
+// User position — mutable so "Go to Destination" can relocate it
+let USER = {x: 185, y: 559};
+
+function updateSidebar(){
+  const a = spots.filter(s=>s.available && !s.reserved).length;
+  const r = spots.filter(s=>s.reserved).length;
+  const total = spots.length;
+  document.getElementById('s-total').textContent = total;
+  document.getElementById('s-avail').textContent = a;
+  document.getElementById('s-res').textContent = r;
+  document.getElementById('s-occ').textContent = total - a - r;
+  const bar = document.getElementById('avail-bar');
+  if(bar) bar.style.width = (total ? (a/total*100).toFixed(1) : 0) + '%';
+}
+
+function showTooltip(spot) {
+  const cx = spot.x + spot.w/2;
+  const cy = spot.y;
+  const tw = 104, th = 46;
+  const tx = cx - tw/2;
+  const ty = cy - th - 8;
+  ttBg.setAttribute('x', tx); ttBg.setAttribute('y', ty);
+  ttBg.setAttribute('width', tw); ttBg.setAttribute('height', th);
+  ttName.setAttribute('x', tx+8); ttName.setAttribute('y', ty+14);
+  ttName.textContent = `Spot ${spot.label}  $${spotPrice(spot.label).toFixed(2)}/hr`;
+  ttStatus.setAttribute('x', tx+8); ttStatus.setAttribute('y', ty+28);
+  ttStatus.textContent = spot.reserved ? 'Reserved' : (spot.available ? 'Available' : 'Occupied');
+  ttStatus.setAttribute('fill', spot.reserved ? '#f59e0b' : (spot.available ? '#22c55e' : '#ef4444'));
+  // price line
+  const ttPrice = document.getElementById('tt-price');
+  ttPrice.setAttribute('x', tx+8); ttPrice.setAttribute('y', ty+40);
+  ttPrice.setAttribute('fill', '#94a3b8');
+  const arrowCx = cx;
+  ttArrow.setAttribute('points', `${arrowCx-4},${ty+th} ${arrowCx+4},${ty+th} ${arrowCx},${ty+th+6}`);
+  tooltip.setAttribute('opacity','1');
+}
+function hideTooltip(){ tooltip.setAttribute('opacity','0'); }
+
+function drawSpots(){
+  spotsLayer.innerHTML = '';
+  spots.forEach(s=>{
+    const col = s.reserved ? '#f59e0b' : (s.available ? '#22c55e' : '#ef4444');
+    const g = document.createElementNS(NS,'g');
+    g.setAttribute('class','spot-el');
+    g.setAttribute('data-id', s.id);
+
+    // White parking stripe backing
+    const bg = document.createElementNS(NS,'rect');
+    bg.setAttribute('x', s.x-1); bg.setAttribute('y', s.y-1);
+    bg.setAttribute('width', s.w+2); bg.setAttribute('height', s.h+2);
+    bg.setAttribute('rx', s.rx+1); bg.setAttribute('fill','#fff');
+    bg.setAttribute('opacity','0.4');
+    g.appendChild(bg);
+
+    const r = document.createElementNS(NS,'rect');
+    r.setAttribute('x', s.x); r.setAttribute('y', s.y);
+    r.setAttribute('width', s.w); r.setAttribute('height', s.h);
+    r.setAttribute('rx', s.rx);
+    r.setAttribute('fill', col);
+    r.style.transition = 'fill 0.5s ease';
+
+    // Reserved: pulsing ring
+    if(s.reserved){
+      const pulse = document.createElementNS(NS,'rect');
+      pulse.setAttribute('x', s.x-2); pulse.setAttribute('y', s.y-2);
+      pulse.setAttribute('width', s.w+4); pulse.setAttribute('height', s.h+4);
+      pulse.setAttribute('rx', s.rx+2);
+      pulse.setAttribute('fill','none');
+      pulse.setAttribute('stroke','#f59e0b');
+      pulse.setAttribute('stroke-width','1.5');
+      pulse.setAttribute('opacity','0.6');
+      const pa = document.createElementNS(NS,'animate');
+      pa.setAttribute('attributeName','opacity');
+      pa.setAttribute('values','0.6;1;0.6');
+      pa.setAttribute('dur','1.2s');
+      pa.setAttribute('repeatCount','indefinite');
+      pulse.appendChild(pa);
+      g.appendChild(pulse);
+    }
+
+    // Selected ring
+    if(selectedId === s.id){
+      const ring = document.createElementNS(NS,'rect');
+      ring.setAttribute('x', s.x-3); ring.setAttribute('y', s.y-3);
+      ring.setAttribute('width', s.w+6); ring.setAttribute('height', s.h+6);
+      ring.setAttribute('rx', s.rx+3);
+      ring.setAttribute('fill','none');
+      ring.setAttribute('stroke','#3b82f6');
+      ring.setAttribute('stroke-width','2.5');
+      g.appendChild(ring);
+    }
+    g.appendChild(r);
+
+    // Label: R for reserved, P otherwise
+    const t = document.createElementNS(NS,'text');
+    t.setAttribute('x', s.x + s.w/2);
+    t.setAttribute('y', s.y + s.h/2 + 3.5);
+    t.setAttribute('text-anchor','middle');
+    t.setAttribute('font-size','7');
+    t.setAttribute('font-weight','700');
+    t.setAttribute('fill', s.reserved ? '#333' : '#fff');
+    t.setAttribute('pointer-events','none');
+    t.setAttribute('font-family','sans-serif');
+    t.textContent = s.reserved ? 'R' : 'P';
+    g.appendChild(t);
+
+    g.addEventListener('click', ()=>handleSpotClick(s.id));
+    g.addEventListener('mouseenter', ()=>showTooltip(s));
+    g.addEventListener('mouseleave', hideTooltip);
+
+    // Countdown timer badge above occupied spot (user-reserved only)
+    if(!s.available && !s.reserved && s.expiresAt){
+      const remaining = Math.max(0, s.expiresAt - Date.now());
+      const totalSec = Math.ceil(remaining / 1000);
+      const hh = Math.floor(totalSec / 3600);
+      const mm = Math.floor((totalSec % 3600) / 60);
+      const ss = totalSec % 60;
+      const timeStr = hh > 0
+        ? `${hh}:${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'0')}`
+        : `${mm}:${String(ss).padStart(2,'0')}`;
+      const urgent = remaining < 5 * 60 * 1000;  // last 5 minutes → red
+
+      const cx = s.x + s.w/2, cy = s.y - 4;
+      const bw = hh > 0 ? 44 : 36, bh = 14;
+
+      const timerBg = document.createElementNS(NS,'rect');
+      timerBg.setAttribute('x', cx - bw/2); timerBg.setAttribute('y', cy - bh);
+      timerBg.setAttribute('width', bw); timerBg.setAttribute('height', bh);
+      timerBg.setAttribute('rx', 4);
+      timerBg.setAttribute('fill', urgent ? '#7f1d1d' : '#0f2027');
+      timerBg.setAttribute('stroke', urgent ? '#ef4444' : '#22c55e');
+      timerBg.setAttribute('stroke-width', '0.8');
+      timerBg.setAttribute('opacity', '0.92');
+      g.appendChild(timerBg);
+
+      const timerTxt = document.createElementNS(NS,'text');
+      timerTxt.setAttribute('x', cx); timerTxt.setAttribute('y', cy - 3);
+      timerTxt.setAttribute('text-anchor','middle');
+      timerTxt.setAttribute('font-size','7');
+      timerTxt.setAttribute('font-weight','700');
+      timerTxt.setAttribute('fill', urgent ? '#fca5a5' : '#4ade80');
+      timerTxt.setAttribute('font-family','monospace');
+      timerTxt.setAttribute('pointer-events','none');
+      timerTxt.textContent = timeStr;
+      g.appendChild(timerTxt);
+
+      // Urgent pulse animation
+      if(urgent){
+        const pa = document.createElementNS(NS,'animate');
+        pa.setAttribute('attributeName','opacity');
+        pa.setAttribute('values','0.92;0.5;0.92');
+        pa.setAttribute('dur','0.8s');
+        pa.setAttribute('repeatCount','indefinite');
+        timerBg.appendChild(pa);
+      }
+    }
+
+    spotsLayer.appendChild(g);
+  });
+  // Move tooltip above spots
+  svg.appendChild(tooltip);
+  svg.appendChild(document.getElementById('user-marker'));
+}
+
+function handleSpotClick(id){
+  selectedId = id;
+  pathLayer.innerHTML='';
+  if(carAnimationId){ cancelAnimationFrame(carAnimationId); carAnimationId=null; }
+  car.setAttribute('visibility','hidden');
+  const s = spots.find(p=>p.id===id);
+
+  const pricePerHr = spotPrice(s.label);
+  let statusExtra = '';
+  if(!s.available && !s.reserved && s.expiresAt){
+    const rem = Math.max(0, s.expiresAt - Date.now());
+    const totalSec = Math.ceil(rem / 1000);
+    const hh = Math.floor(totalSec/3600), mm = Math.floor((totalSec%3600)/60), ss = totalSec%60;
+    const timeStr = hh>0 ? `${hh}:${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'0')}` : `${mm}:${String(ss).padStart(2,'0')}`;
+    statusExtra = `<br><span style="color:#4ade80;font-size:11px">⏱ ${timeStr} remaining</span>`;
+  }
+  document.getElementById('infobox').innerHTML =
+    `<strong>Spot ${s.label}</strong><br>` +
+    `Status: <span style="color:${s.reserved?'#f59e0b':s.available?'#22c55e':'#ef4444'};font-weight:500">${s.reserved?'Reserved':s.available?'Available':'Occupied'}</span>` +
+    statusExtra +
+    `<br><span style="color:#94a3b8;font-size:11px">💲 $${pricePerHr.toFixed(2)} / hr</span>`;
+  document.getElementById('nomsg').style.display='none';
+  drawSpots();
+  smoothZoomToSpot(s);
+
+  // Draw path + animate car only for truly free spots
+  if(s.available && !s.reserved){
+    const fromSnap = userRoadSnap();
+    const toSnap = spotRoadCenter(s);
+    const pts = buildRoadPath(fromSnap, toSnap);
+    lastRoadPathPts = pts;          // ← save for "Go to Destination"
+    drawRoadPath(pts);
+    svg.insertBefore(pathLayer, document.getElementById('user-marker'));
+    showOccupyButton(true);
+  } else {
+    showOccupyButton(false);
+  }
+}
+
+// BFS on road network modeled as graph nodes at spots + user
+// Simple: compute Euclidean distance and draw straight SVG path only along roads
+// True BFS: we use a waypoint road graph
+// Road graph: all spots + user, edges exist if they share a road axis
+const H_ROADS_Y = [140, 270, 420, 559]; // center y of horizontal roads
+const V_ROADS_X = [185, 445, 635, 764]; // center x of vertical roads
+
+function spotRoadCenter(s){
+  // Get the road center (x or y) nearest to this spot
+  const cx = s.x + s.w/2, cy = s.y + s.h/2;
+  // Find nearest H road
+  let bestH = H_ROADS_Y[0], dh = Infinity;
+  H_ROADS_Y.forEach(y=>{ if(Math.abs(cy-y)<dh){dh=Math.abs(cy-y);bestH=y;} });
+  // Find nearest V road
+  let bestV = V_ROADS_X[0], dv = Infinity;
+  V_ROADS_X.forEach(x=>{ if(Math.abs(cx-x)<dv){dv=Math.abs(cx-x);bestV=x;} });
+  // Determine if H or V road is closer
+  if(dh < dv) return {snapX: cx, snapY: bestH, roadType:'h', roadVal: bestH};
+  return {snapX: bestV, snapY: cy, roadType:'v', roadVal: bestV};
+}
+
+function userRoadSnap(){
+  return {snapX: USER.x, snapY: USER.y, roadType:'h', roadVal: USER.y};
+}
+
+// Build a realistic road path: go to road, travel along, turn, reach spot
+function buildRoadPath(fromSnap, toSnap){
+  // From fromSnap, navigate on roads to toSnap
+  // Strategy: move along connecting roads via intersection waypoints
+  const pts = [];
+  const fx = fromSnap.snapX, fy = fromSnap.snapY;
+  const tx = toSnap.snapX, ty = toSnap.snapY;
+
+  pts.push({x:fx, y:fy});
+
+  if(fromSnap.roadType === 'h'){
+    // Travel horizontal to nearest V road that connects to target
+    const targetVX = nearestVRoad(tx);
+    if(Math.abs(fx - targetVX) > 5) pts.push({x:targetVX, y:fy});
+    // Travel vertical to target road
+    if(Math.abs(fy - ty) > 5) pts.push({x:targetVX, y:ty});
+  } else {
+    const targetHY = nearestHRoad(ty);
+    if(Math.abs(fy - targetHY) > 5) pts.push({x:fx, y:targetHY});
+    if(Math.abs(fx - tx) > 5) pts.push({x:tx, y:targetHY});
+  }
+
+  pts.push({x:tx, y:ty});
+  return pts;
+}
+
+function buildSmoothPath(points){
+  if(!points.length) return '';
+  let d = `M ${points[0].x} ${points[0].y}`;
+  const radius = 16;
+
+  for(let i = 1; i < points.length; i++){
+    const prev = points[i - 1];
+    const curr = points[i];
+    const next = points[i + 1];
+
+    const isTurn = next && ((prev.x === curr.x && curr.y === next.y) || (prev.y === curr.y && curr.x === next.x));
+    if(isTurn){
+      const r = Math.min(radius,
+        Math.abs(curr.x - prev.x) / 2,
+        Math.abs(curr.y - prev.y) / 2,
+        Math.abs(next.x - curr.x) / 2,
+        Math.abs(next.y - curr.y) / 2
+      );
+      const startX = curr.x - (curr.x - prev.x ? Math.sign(curr.x - prev.x) * r : 0);
+      const startY = curr.y - (curr.y - prev.y ? Math.sign(curr.y - prev.y) * r : 0);
+      const endX = curr.x + (next.x - curr.x ? Math.sign(next.x - curr.x) * r : 0);
+      const endY = curr.y + (next.y - curr.y ? Math.sign(next.y - curr.y) * r : 0);
+      d += ` L ${startX} ${startY}`;
+      d += ` Q ${curr.x} ${curr.y} ${endX} ${endY}`;
+    } else {
+      d += ` L ${curr.x} ${curr.y}`;
+    }
+  }
+
+  return d;
+}
+
+function animateCar(pathElement){
+  if(carAnimationId) cancelAnimationFrame(carAnimationId);
+  const totalLength = pathElement.getTotalLength();
+  if(totalLength <= 0) return;
+
+  car.setAttribute('visibility', 'visible');
+
+  // Scale duration to path length: ~6px/ms, clamped between 1.5s and 5s
+  const duration = Math.min(5000, Math.max(1500, totalLength * 6));
+
+  // Ease in-out cubic
+  function easeInOut(t){ return t<0.5 ? 4*t*t*t : 1-Math.pow(-2*t+2,3)/2; }
+
+  let startTime = null;
+  let lastAngle = 0;
+
+  function step(timestamp){
+    if(!startTime) startTime = timestamp;
+    const elapsed = timestamp - startTime;
+    const rawProgress = Math.min(elapsed / duration, 1);
+    const progress = easeInOut(rawProgress);
+    const distance = totalLength * progress;
+
+    const point = pathElement.getPointAtLength(distance);
+
+    // Look-ahead proportional to speed (faster = look further ahead for smooth rotation)
+    const lookDist = Math.min(totalLength, distance + Math.max(4, totalLength * 0.015));
+    const nextPoint = pathElement.getPointAtLength(lookDist);
+
+    const dx = nextPoint.x - point.x;
+    const dy = nextPoint.y - point.y;
+
+    // Only update angle when there is meaningful movement (avoids jitter at destination)
+    if(Math.abs(dx) > 0.01 || Math.abs(dy) > 0.01){
+      lastAngle = Math.atan2(dy, dx) * 180 / Math.PI;
+    }
+
+    car.setAttribute('transform', `translate(${point.x.toFixed(2)} ${point.y.toFixed(2)}) rotate(${lastAngle.toFixed(2)})`);
+
+    if(rawProgress < 1){
+      carAnimationId = requestAnimationFrame(step);
+    } else {
+      carAnimationId = null;
+      // Snap car to exact destination
+      const endPt = pathElement.getPointAtLength(totalLength);
+      car.setAttribute('transform', `translate(${endPt.x.toFixed(2)} ${endPt.y.toFixed(2)}) rotate(${lastAngle.toFixed(2)})`);
+    }
+  }
+
+  carAnimationId = requestAnimationFrame(step);
+}
+
+function nearestVRoad(x){
+  let best=V_ROADS_X[0],d=Infinity;
+  V_ROADS_X.forEach(vx=>{if(Math.abs(x-vx)<d){d=Math.abs(x-vx);best=vx;}});
+  return best;
+}
+function nearestHRoad(y){
+  let best=H_ROADS_Y[0],d=Infinity;
+  H_ROADS_Y.forEach(hy=>{if(Math.abs(y-hy)<d){d=Math.abs(y-hy);best=hy;}});
+  return best;
+}
+
+function pathDistance(fromSnap, toSnap){
+  const pts = buildRoadPath(fromSnap, toSnap);
+  let dist=0;
+  for(let i=1;i<pts.length;i++){
+    const dx=pts[i].x-pts[i-1].x, dy=pts[i].y-pts[i-1].y;
+    dist+=Math.sqrt(dx*dx+dy*dy);
+  }
+  return dist;
+}
+
+function drawRoadPath(pts){
+  pathLayer.innerHTML='';
+  if(pts.length<2) return;
+
+  // Use smooth Bézier curves instead of raw L segments
+  const d = buildSmoothPath(pts);
+
+  // Glow/shadow
+  const shadow = document.createElementNS(NS,'path');
+  shadow.setAttribute('d',d);
+  shadow.setAttribute('fill','none');
+  shadow.setAttribute('stroke','#1d4ed8');
+  shadow.setAttribute('stroke-width','7');
+  shadow.setAttribute('stroke-linecap','round');
+  shadow.setAttribute('stroke-linejoin','round');
+  shadow.setAttribute('opacity','0.3');
+  pathLayer.appendChild(shadow);
+
+  const line = document.createElementNS(NS,'path');
+  line.setAttribute('d',d);
+  line.setAttribute('fill','none');
+  line.setAttribute('stroke','#3b82f6');
+  line.setAttribute('stroke-width','4');
+  line.setAttribute('stroke-linecap','round');
+  line.setAttribute('stroke-linejoin','round');
+  line.setAttribute('stroke-dasharray','12,7');
+  line.setAttribute('opacity','0.92');
+  pathLayer.appendChild(line);
+
+  // Animated dash
+  const anim = document.createElementNS(NS,'animate');
+  anim.setAttribute('attributeName','stroke-dashoffset');
+  anim.setAttribute('from','0');
+  anim.setAttribute('to','-19');
+  anim.setAttribute('dur','0.6s');
+  anim.setAttribute('repeatCount','indefinite');
+  line.appendChild(anim);
+
+  // Ensure car renders above the path layer
+  svg.appendChild(car);
+
+  // Kick off car animation along the smooth path
+  animateCar(line);
+}
+
+function findBestParking(){
+  const avail = spots.filter(s=>s.available && !s.reserved);
+  if(!avail.length){
+    const nm = document.getElementById('nomsg');
+    nm.textContent='No parking available.';
+    nm.style.display='block';
+    return;
+  }
+  document.getElementById('nomsg').style.display='none';
+
+  const fromSnap = userRoadSnap();
+  let bestSpot=null, bestDist=Infinity, bestPts=null;
+  avail.forEach(s=>{
+    const toSnap = spotRoadCenter(s);
+    const d = pathDistance(fromSnap, toSnap);
+    if(d<bestDist){bestDist=d;bestSpot=s;bestPts=buildRoadPath(fromSnap,toSnap);}
+  });
+
+  selectedId = bestSpot.id;
+  drawSpots();
+  smoothZoomToSpot(bestSpot);
+  lastRoadPathPts = bestPts;        // ← save for "Go to Destination"
+  drawRoadPath(bestPts);
+  // Move path under user marker
+  svg.insertBefore(pathLayer, document.getElementById('user-marker'));
+  document.getElementById('infobox').innerHTML=
+    `<strong>Best spot: ${bestSpot.label}</strong><br>` +
+    `Road distance: ~${Math.round(bestDist)} px<br>` +
+    `<span style="color:#22c55e;font-weight:500">Available</span> · ` +
+    `<span style="color:#94a3b8;font-size:11px">💲 $${spotPrice(bestSpot.label).toFixed(2)}/hr</span>`;
+  showOccupyButton(true);
+}
+
+function clearAll(){
+  selectedId=null;
+  pathLayer.innerHTML='';
+  if(carAnimationId) cancelAnimationFrame(carAnimationId);
+  carAnimationId = null;
+  car.setAttribute('visibility', 'hidden');
+  drawSpots();
+  document.getElementById('infobox').textContent='Click a parking spot on the map.';
+  document.getElementById('nomsg').style.display='none';
+  showOccupyButton(false);
+}
+
+// ── Reserve / Occupy helpers ──────────────────────────────────────────────────
+function showOccupyButton(show){
+  const btn = document.getElementById('occupybtn');
+  btn.style.display = show ? 'block' : 'none';
+}
+
+let lastOccupiedSpot = null;  // set when user confirms reservation & goes to destination
+let reservedSpotData = null;  // {spot, name, minutes} — confirmed reservation waiting for goto
+let lastRoadPathPts  = null;  // road waypoints saved when path was first drawn
+
+// ── Duration picker logic ─────────────────────────────────────────────────────
+let selectedDurVal = null;
+
+document.getElementById('rm-duration-grid').addEventListener('click', e=>{
+  const btn = e.target.closest('.dur-btn');
+  if(!btn) return;
+  document.querySelectorAll('.dur-btn').forEach(b=>b.classList.remove('selected'));
+  btn.classList.add('selected');
+  selectedDurVal = btn.dataset.val;
+  const customInput = document.getElementById('rm-custom-input');
+  if(selectedDurVal === 'custom'){
+    customInput.style.display = 'block';
+    customInput.focus();
+  } else {
+    customInput.style.display = 'none';
+  }
+  document.getElementById('rm-dur-err').style.display = 'none';
+});
+
+// ── Open reservation form ─────────────────────────────────────────────────────
+function openReserveModal(){
+  if(selectedId === null) return;
+  const s = spots.find(p=>p.id===selectedId);
+  if(!s || !s.available || s.reserved) return;
+
+  // Reset form
+  document.getElementById('rm-name').value = '';
+  document.getElementById('rm-name-err').style.display = 'none';
+  document.getElementById('rm-dur-err').style.display = 'none';
+  document.getElementById('rm-custom-input').style.display = 'none';
+  document.getElementById('rm-custom-input').value = '';
+  document.querySelectorAll('.dur-btn').forEach(b=>b.classList.remove('selected'));
+  selectedDurVal = null;
+  document.getElementById('rm-spot-label').textContent = `Spot ${s.label}`;
+  document.getElementById('rm-spot-price').textContent = `$${spotPrice(s.label).toFixed(2)}/hr`;
+  document.getElementById('reserve-modal').style.display = 'flex';
+  setTimeout(()=>document.getElementById('rm-name').focus(), 120);
+}
+
+document.getElementById('occupybtn').addEventListener('click', openReserveModal);
+
+document.getElementById('rm-cancel').addEventListener('click', ()=>{
+  document.getElementById('reserve-modal').style.display = 'none';
+});
+
+// ── Confirm reservation ───────────────────────────────────────────────────────
+document.getElementById('rm-confirm').addEventListener('click', ()=>{
+  const name = document.getElementById('rm-name').value.trim();
+  let minutes = null;
+
+  // Validate name
+  if(!name){
+    document.getElementById('rm-name-err').style.display = 'block';
+    document.getElementById('rm-name').focus();
+    return;
+  }
+  document.getElementById('rm-name-err').style.display = 'none';
+
+  // Validate duration
+  if(!selectedDurVal){
+    document.getElementById('rm-dur-err').style.display = 'block';
+    return;
+  }
+  if(selectedDurVal === 'custom'){
+    const v = parseInt(document.getElementById('rm-custom-input').value);
+    if(!v || v < 1){
+      document.getElementById('rm-dur-err').textContent = 'Enter a valid number of minutes.';
+      document.getElementById('rm-dur-err').style.display = 'block';
+      return;
+    }
+    minutes = v;
+  } else {
+    minutes = parseInt(selectedDurVal);
+  }
+  document.getElementById('rm-dur-err').style.display = 'none';
+
+  const s = spots.find(p=>p.id===selectedId);
+  if(!s) return;
+
+  // Mark spot reserved (yellow) — NOT occupied yet
+  s.reserved = true;
+  s.available = false;
+  reservedSpotData = {spot: s, name, minutes};
+
+  drawSpots();
+  updateSidebar();
+  showOccupyButton(false);
+
+  // Clear path & car
+  pathLayer.innerHTML='';
+  if(carAnimationId){ cancelAnimationFrame(carAnimationId); carAnimationId=null; }
+  car.setAttribute('visibility','hidden');
+
+  // Build duration label
+  const hrs = Math.floor(minutes/60), mins = minutes%60;
+  const durStr = hrs > 0
+    ? (mins > 0 ? `${hrs}h ${mins}m` : `${hrs} hour${hrs>1?'s':''}`)
+    : `${mins} minutes`;
+
+  const priceHr = spotPrice(s.label);
+  const totalCost = (priceHr * minutes / 60).toFixed(2);
+
+  // Close form, open confirmation popup
+  document.getElementById('reserve-modal').style.display = 'none';
+  document.getElementById('popup-label').innerHTML =
+    `<strong style="color:#f1f5f9">${name}</strong> · Spot ${s.label}<br>Reserved for ${durStr}`;
+  document.getElementById('popup-timer-label').textContent = `⏱ ${durStr} parking window`;
+  document.getElementById('popup-cost').textContent = `💲 Estimated cost: $${totalCost}`;
+  document.getElementById('occupy-popup').style.display = 'flex';
+
+  // Update infobox
+  document.getElementById('infobox').innerHTML =
+    `<strong>Spot ${s.label}</strong><br>` +
+    `Reserved by <span style="color:#f59e0b;font-weight:600">${name}</span><br>` +
+    `Duration: ${durStr}<br>` +
+    `<span style="color:#22c55e;font-size:11px">💲 Est. $${totalCost} total</span>`;
+
+  soundReserve();
+});
+
+// ── Dismiss confirmation ──────────────────────────────────────────────────────
+document.getElementById('popup-close').addEventListener('click', ()=>{
+  document.getElementById('occupy-popup').style.display = 'none';
+  selectedId = null;
+  reservedSpotData = null;
+  drawSpots();
+});
+
+// ── Go to Destination → mark spot OCCUPIED ───────────────────────────────────
+document.getElementById('goto-btn').addEventListener('click', ()=>{
+  document.getElementById('occupy-popup').style.display = 'none';
+  if(!reservedSpotData) return;
+
+  const {spot, name, minutes} = reservedSpotData;
+  lastOccupiedSpot = spot;
+
+  // Now truly occupy it
+  spot.reserved = false;
+  spot.available = false;
+  spot.expiresAt = Date.now() + minutes * 60 * 1000;  // countdown start
+  spot.occupiedName = name;
+  drawSpots();
+  updateSidebar();
+  reservedSpotData = null;
+  selectedId = null;
+
+  animateUserToSpot(spot, name, minutes);
+});
+
+// Animate the "You" marker along the road path to the occupied spot
+function animateUserToSpot(spot, name, minutes){
+  const destX = spot.x + spot.w / 2;
+  const destY = spot.y + spot.h / 2;
+
+  const marker  = document.getElementById('user-marker');
+  const circles = marker.querySelectorAll('circle');
+  const label   = marker.querySelector('text');
+
+  // Build the road path (reuse saved points if available, else recompute)
+  const pts = lastRoadPathPts || buildRoadPath(userRoadSnap(), spotRoadCenter(spot));
+  lastRoadPathPts = null;
+  const smoothD = buildSmoothPath(pts);
+
+  // Create an invisible phantom path to drive getPointAtLength along
+  const phantom = document.createElementNS(NS, 'path');
+  phantom.setAttribute('d', smoothD);
+  phantom.setAttribute('fill', 'none');
+  phantom.setAttribute('stroke', 'none');
+  pathLayer.appendChild(phantom);
+
+  // Draw the animated road trail (green dashed, following the road)
+  const trail = document.createElementNS(NS, 'path');
+  trail.setAttribute('d', smoothD);
+  trail.setAttribute('fill', 'none');
+  trail.setAttribute('stroke', '#22c55e');
+  trail.setAttribute('stroke-width', '3');
+  trail.setAttribute('stroke-dasharray', '8,6');
+  trail.setAttribute('stroke-linecap', 'round');
+  trail.setAttribute('opacity', '0.6');
+  pathLayer.appendChild(trail);
+
+  const trailAnim = document.createElementNS(NS, 'animate');
+  trailAnim.setAttribute('attributeName', 'stroke-dashoffset');
+  trailAnim.setAttribute('from', '0');
+  trailAnim.setAttribute('to', '-28');
+  trailAnim.setAttribute('dur', '0.5s');
+  trailAnim.setAttribute('repeatCount', 'indefinite');
+  trail.appendChild(trailAnim);
+
+  const totalLen = phantom.getTotalLength();
+  const duration = Math.min(5000, Math.max(1800, totalLen * 6));
+  let startTime = null;
+  let lastAngle = 0;
+
+  function ease(t){ return t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2, 3)/2; }
+
+  function step(ts){
+    if(!startTime) startTime = ts;
+    const t    = ease(Math.min((ts - startTime) / duration, 1));
+    const dist = totalLen * t;
+    const pt   = phantom.getPointAtLength(dist);
+    const ptN  = phantom.getPointAtLength(Math.min(totalLen, dist + totalLen * 0.015));
+    const dx = ptN.x - pt.x, dy = ptN.y - pt.y;
+    if(Math.abs(dx) > 0.01 || Math.abs(dy) > 0.01)
+      lastAngle = Math.atan2(dy, dx) * 180 / Math.PI;
+
+    circles.forEach(c => { c.setAttribute('cx', pt.x); c.setAttribute('cy', pt.y); });
+    label.setAttribute('x', pt.x);
+    label.setAttribute('y', pt.y - 16);
+
+    if(t < 1){
+      requestAnimationFrame(step);
+    } else {
+      // Commit new position
+      USER.x = destX;
+      USER.y = destY;
+      circles.forEach(c => { c.setAttribute('cx', destX); c.setAttribute('cy', destY); });
+      label.setAttribute('x', destX);
+      label.setAttribute('y', destY - 16);
+
+      // Clean up phantom + trail
+      if(phantom.parentNode) phantom.parentNode.removeChild(phantom);
+      setTimeout(()=>{ if(trail.parentNode) trail.parentNode.removeChild(trail); }, 1200);
+
+      // Flash a green arrival ring
+      const ring = document.createElementNS(NS, 'circle');
+      ring.setAttribute('cx', destX); ring.setAttribute('cy', destY);
+      ring.setAttribute('r', '18'); ring.setAttribute('fill', 'none');
+      ring.setAttribute('stroke', '#22c55e'); ring.setAttribute('stroke-width', '2.5');
+      ring.setAttribute('opacity', '1');
+      pathLayer.appendChild(ring);
+      const ringAnim = document.createElementNS(NS, 'animate');
+      ringAnim.setAttribute('attributeName', 'opacity');
+      ringAnim.setAttribute('from', '1'); ringAnim.setAttribute('to', '0');
+      ringAnim.setAttribute('dur', '0.8s'); ringAnim.setAttribute('fill', 'freeze');
+      ring.appendChild(ringAnim);
+      setTimeout(()=>{ if(ring.parentNode) ring.parentNode.removeChild(ring); }, 850);
+
+      // Update infobox
+      const hrs2 = Math.floor((minutes||0)/60), mins2 = (minutes||0)%60;
+      const durStr2 = minutes ? (hrs2>0?(mins2>0?`${hrs2}h ${mins2}m`:`${hrs2}hr${hrs2>1?'s':''}`):`${mins2}min`) : '';
+      document.getElementById('infobox').innerHTML =
+        `<strong>📍 Arrived at Spot ${spot.label}</strong><br>` +
+        `<span style="color:#22c55e;font-weight:600">Occupied by ${name||'You'}</span>` +
+        (durStr2 ? `<br><span style="color:#64748b;font-size:11px">⏱ ${durStr2} window</span>` : '') +
+        `<br><span style="color:#3b82f6;font-size:11px;font-weight:600">🚶 Tap a building to walk there</span>`;
+
+      playTone(660,'sine',0.1,0.15);
+      setTimeout(()=>playTone(880,'sine',0.08,0.12), 110);
+      setTimeout(()=>playTone(1100,'sine',0.06,0.1), 220);
+
+      // After a short pause, enter building-selection mode
+      setTimeout(()=> showBuildingTargets(destX, destY, name), 900);
+    }
+  }
+  requestAnimationFrame(step);
+}
+
+// ── Existing button listeners ────────────────────────────────────────────────
+document.getElementById('findbtn').addEventListener('click', findBestParking);
+document.getElementById('clearbtn').addEventListener('click', clearAll);
+document.getElementById('resetviewbtn').addEventListener('click', ()=>{
+  if(zoomAnimId){ cancelAnimationFrame(zoomAnimId); zoomAnimId = null; }
+  const fromX=vx,fromY=vy,fromW=vw,fromH=vh;
+  const duration=520; let startTime=null;
+  function ease(t){ return t<0.5?2*t*t:-1+(4-2*t)*t; }
+  function step(ts){
+    if(!startTime) startTime=ts;
+    const t=ease(Math.min((ts-startTime)/duration,1));
+    vx=fromX+(0-fromX)*t; vy=fromY+(0-fromY)*t;
+    vw=fromW+(900-fromW)*t; vh=fromH+(720-fromH)*t;
+    svg.setAttribute('viewBox',`${vx} ${vy} ${vw} ${vh}`);
+    if(t<1) zoomAnimId=requestAnimationFrame(step); else zoomAnimId=null;
+  }
+  zoomAnimId=requestAnimationFrame(step);
+});
+
+// ── Pedestrian Avatar System ──────────────────────────────────────────────────
+
+// Named buildings with their centre coords and a door point on the street edge
+const BUILDINGS = [
+  { name:'City Hall',      cx:265, cy:77,  door:{x:265, y:125} },
+  { name:'Central Market', cx:420, cy:77,  door:{x:420, y:125} },
+  { name:'Tech Tower',     cx:570, cy:77,  door:{x:570, y:125} },
+  { name:'Grand Hotel',    cx:760, cy:62,  door:{x:760, y:125} },
+  { name:'Art Museum',     cx:260, cy:205, door:{x:260, y:255} },
+  { name:'Innovation Hub', cx:570, cy:205, door:{x:570, y:255} },
+  { name:'East Plaza',     cx:760, cy:205, door:{x:760, y:255} },
+  { name:'West Offices',   cx:350, cy:205, door:{x:350, y:255} },
+  { name:'Mall',           cx:350, cy:345, door:{x:350, y:285} },
+  { name:'Finance Bldg',   cx:540, cy:345, door:{x:540, y:285} },
+  { name:'Skyview Apts',   cx:695, cy:345, door:{x:695, y:285} },
+  { name:'North Tower',    cx:815, cy:345, door:{x:815, y:285} },
+  { name:'Stadium',        cx:280, cy:490, door:{x:280, y:435} },
+  { name:'Convention Ctr', cx:540, cy:490, door:{x:540, y:435} },
+  { name:'South Park',     cx:695, cy:490, door:{x:695, y:435} },
+  { name:'Harbor View',    cx:815, cy:490, door:{x:815, y:435} },
+  { name:'Riverside Ctr',  cx:340, cy:625, door:{x:340, y:573} },
+  { name:'Sunset Lofts',   cx:540, cy:625, door:{x:540, y:573} },
+  { name:'Bay Tower',      cx:695, cy:625, door:{x:695, y:573} },
+];
+
+const pedLayer      = document.getElementById('ped-layer');
+const buildingsLayer= document.getElementById('buildings-layer');
+let   pedEl         = null;   // the SVG pedestrian group
+let   pedAnimId     = null;
+let   buildingMode  = false;
+let   pedStartX     = 0, pedStartY = 0;
+let   pedName       = '';
+
+// ── Create the walking figure SVG element ─────────────────────────────────
+function createPedestrian(color='#60a5fa'){
+  const g = document.createElementNS(NS,'g');
+  g.setAttribute('id','pedestrian');
+
+  // Shadow
+  const shadow = document.createElementNS(NS,'ellipse');
+  shadow.setAttribute('cx','0'); shadow.setAttribute('cy','7');
+  shadow.setAttribute('rx','4'); shadow.setAttribute('ry','1.5');
+  shadow.setAttribute('fill','rgba(0,0,0,0.25)');
+  g.appendChild(shadow);
+
+  // Body
+  const body = document.createElementNS(NS,'rect');
+  body.setAttribute('x','-3'); body.setAttribute('y','0');
+  body.setAttribute('width','6'); body.setAttribute('height','7');
+  body.setAttribute('rx','1.5'); body.setAttribute('fill', color);
+  g.appendChild(body);
+
+  // Head
+  const head = document.createElementNS(NS,'circle');
+  head.setAttribute('cx','0'); head.setAttribute('cy','-3');
+  head.setAttribute('r','3'); head.setAttribute('fill', color);
+  g.appendChild(head);
+
+  // Left leg
+  const ll = document.createElementNS(NS,'line');
+  ll.setAttribute('x1','-2'); ll.setAttribute('y1','7');
+  ll.setAttribute('x2','-3'); ll.setAttribute('y2','12');
+  ll.setAttribute('stroke', color); ll.setAttribute('stroke-width','1.8');
+  ll.setAttribute('stroke-linecap','round');
+  g.appendChild(ll);
+
+  // Right leg
+  const rl = document.createElementNS(NS,'line');
+  rl.setAttribute('x1','2');  rl.setAttribute('y1','7');
+  rl.setAttribute('x2','3');  rl.setAttribute('y2','12');
+  rl.setAttribute('stroke', color); rl.setAttribute('stroke-width','1.8');
+  rl.setAttribute('stroke-linecap','round');
+  g.appendChild(rl);
+
+  // Left arm
+  const la = document.createElementNS(NS,'line');
+  la.setAttribute('x1','-3'); la.setAttribute('y1','2');
+  la.setAttribute('x2','-6'); la.setAttribute('y2','5');
+  la.setAttribute('stroke', color); la.setAttribute('stroke-width','1.5');
+  la.setAttribute('stroke-linecap','round');
+  g.appendChild(la);
+
+  // Right arm
+  const ra = document.createElementNS(NS,'line');
+  ra.setAttribute('x1','3');  ra.setAttribute('y1','2');
+  ra.setAttribute('x2','6');  ra.setAttribute('y2','5');
+  ra.setAttribute('stroke', color); ra.setAttribute('stroke-width','1.5');
+  ra.setAttribute('stroke-linecap','round');
+  g.appendChild(ra);
+
+  // Name label
+  const lbl = document.createElementNS(NS,'text');
+  lbl.setAttribute('y','-8'); lbl.setAttribute('text-anchor','middle');
+  lbl.setAttribute('font-size','6'); lbl.setAttribute('font-weight','700');
+  lbl.setAttribute('fill', color); lbl.setAttribute('font-family','sans-serif');
+  lbl.setAttribute('pointer-events','none');
+  lbl.setAttribute('stroke','#fff'); lbl.setAttribute('stroke-width','2');
+  lbl.setAttribute('paint-order','stroke');
+  lbl.setAttribute('id','ped-name-label');
+  g.appendChild(lbl);
+
+  return {g, ll, rl, la, ra};
+}
+
+// ── Walking leg/arm animation (CSS keyframe via JS) ───────────────────────
+function animateLegs(pedParts, walking){
+  if(!walking){
+    pedParts.ll.setAttribute('x2','-3'); pedParts.ll.setAttribute('y2','12');
+    pedParts.rl.setAttribute('x2','3');  pedParts.rl.setAttribute('y2','12');
+    pedParts.la.setAttribute('x2','-6'); pedParts.la.setAttribute('y2','5');
+    pedParts.ra.setAttribute('x2','6');  pedParts.ra.setAttribute('y2','5');
+    return;
+  }
+  const t = Date.now() / 180;
+  const swing = Math.sin(t) * 3;
+  pedParts.ll.setAttribute('x2', String(-2 + swing));  pedParts.ll.setAttribute('y2','12');
+  pedParts.rl.setAttribute('x2', String(2  - swing));  pedParts.rl.setAttribute('y2','12');
+  pedParts.la.setAttribute('x2', String(-5 - swing*0.5)); pedParts.la.setAttribute('y2','5');
+  pedParts.ra.setAttribute('x2', String(5  + swing*0.5)); pedParts.ra.setAttribute('y2','5');
+}
+
+// ── Show pulsing building targets ──────────────────────────────────────────
+function showBuildingTargets(fromX, fromY, name){
+  buildingMode = true;
+  pedStartX = fromX; pedStartY = fromY; pedName = name;
+  buildingsLayer.style.display = '';
+  buildingsLayer.innerHTML = '';
+
+  BUILDINGS.forEach((b, i) => {
+    const g = document.createElementNS(NS,'g');
+    g.style.cursor = 'pointer';
+
+    // Glowing pin circle
+    const outer = document.createElementNS(NS,'circle');
+    outer.setAttribute('cx', b.cx); outer.setAttribute('cy', b.cy);
+    outer.setAttribute('r','10'); outer.setAttribute('fill','rgba(59,130,246,0.18)');
+    outer.setAttribute('stroke','#3b82f6'); outer.setAttribute('stroke-width','1.5');
+
+    // Pulse animation staggered
+    const pa = document.createElementNS(NS,'animate');
+    pa.setAttribute('attributeName','r'); pa.setAttribute('values','10;14;10');
+    pa.setAttribute('dur','1.6s'); pa.setAttribute('begin', `${i*0.12}s`);
+    pa.setAttribute('repeatCount','indefinite');
+    outer.appendChild(pa);
+
+    const opa = document.createElementNS(NS,'animate');
+    opa.setAttribute('attributeName','opacity'); opa.setAttribute('values','0.8;0.3;0.8');
+    opa.setAttribute('dur','1.6s'); opa.setAttribute('begin', `${i*0.12}s`);
+    opa.setAttribute('repeatCount','indefinite');
+    outer.appendChild(opa);
+
+    // Inner dot
+    const dot = document.createElementNS(NS,'circle');
+    dot.setAttribute('cx', b.cx); dot.setAttribute('cy', b.cy);
+    dot.setAttribute('r','4'); dot.setAttribute('fill','#3b82f6');
+
+    // Label background
+    const lbg = document.createElementNS(NS,'rect');
+    const lblW = b.name.length * 4.8 + 10;
+    lbg.setAttribute('x', b.cx - lblW/2); lbg.setAttribute('y', b.cy - 22);
+    lbg.setAttribute('width', lblW); lbg.setAttribute('height', 12);
+    lbg.setAttribute('rx', 3); lbg.setAttribute('fill','rgba(15,17,23,0.82)');
+
+    // Label text
+    const lbl = document.createElementNS(NS,'text');
+    lbl.setAttribute('x', b.cx); lbl.setAttribute('y', b.cy - 13);
+    lbl.setAttribute('text-anchor','middle'); lbl.setAttribute('font-size','6.5');
+    lbl.setAttribute('font-weight','600'); lbl.setAttribute('fill','#93c5fd');
+    lbl.setAttribute('font-family','sans-serif'); lbl.setAttribute('pointer-events','none');
+    lbl.textContent = b.name;
+
+    [outer, dot, lbg, lbl].forEach(el => g.appendChild(el));
+
+    g.addEventListener('click', ()=> startPedestrianWalk(b));
+    buildingsLayer.appendChild(g);
+  });
+
+  document.getElementById('infobox').innerHTML =
+    `<strong>🚶 Walking mode</strong><br>` +
+    `<span style="color:#3b82f6;font-size:11px">Tap a glowing building to walk there</span><br>` +
+    `<span style="color:#64748b;font-size:10px">Blue pins = destinations</span>`;
+}
+
+// ── Hide building targets ──────────────────────────────────────────────────
+function hideBuildingTargets(){
+  buildingMode = false;
+  buildingsLayer.style.display = 'none';
+  buildingsLayer.innerHTML = '';
+}
+
+// ── Walk the pedestrian from parked spot to a building door ───────────────
+function startPedestrianWalk(building){
+  hideBuildingTargets();
+  if(pedAnimId){ cancelAnimationFrame(pedAnimId); pedAnimId=null; }
+  if(pedEl && pedEl.parentNode) pedEl.parentNode.removeChild(pedEl);
+
+  const pedParts = createPedestrian('#60a5fa');
+  pedEl = pedParts.g;
+  pedLayer.appendChild(pedEl);
+  document.getElementById('ped-name-label').textContent = pedName || 'You';
+
+  // Path: parked spot → building door (straight line walk, off-road is fine for pedestrian)
+  // Build a simple 2-point path via a street axis to look natural
+  const fx = pedStartX, fy = pedStartY;
+  const tx = building.door.x, ty = building.door.y;
+
+  // Pedestrian walks in an L: first along X, then along Y (or via nearest road)
+  const pedPts = [{x:fx, y:fy}, {x:tx, y:fy}, {x:tx, y:ty}];
+  const pedD   = buildSmoothPath(pedPts);
+
+  const phantom = document.createElementNS(NS,'path');
+  phantom.setAttribute('d', pedD);
+  phantom.setAttribute('fill','none'); phantom.setAttribute('stroke','none');
+  pedLayer.appendChild(phantom);
+
+  // Footstep trail dots
+  const footTrail = document.createElementNS(NS,'path');
+  footTrail.setAttribute('d', pedD);
+  footTrail.setAttribute('fill','none');
+  footTrail.setAttribute('stroke','rgba(96,165,250,0.45)');
+  footTrail.setAttribute('stroke-width','1.5');
+  footTrail.setAttribute('stroke-dasharray','3,8');
+  footTrail.setAttribute('stroke-linecap','round');
+  pedLayer.insertBefore(footTrail, pedEl);
+
+  const ftAnim = document.createElementNS(NS,'animate');
+  ftAnim.setAttribute('attributeName','stroke-dashoffset');
+  ftAnim.setAttribute('from','0'); ftAnim.setAttribute('to','-22');
+  ftAnim.setAttribute('dur','0.4s'); ftAnim.setAttribute('repeatCount','indefinite');
+  footTrail.appendChild(ftAnim);
+
+  const totalLen = phantom.getTotalLength();
+  const duration = Math.min(6000, Math.max(2000, totalLen * 14)); // slower than car
+  let startTime = null, lastAngle = 0;
+
+  function ease(t){ return t < 0.5 ? 2*t*t : -1+(4-2*t)*t; }
+
+  // Zoom map to show both start and building
+  smoothZoomToRegion(fx, fy, tx, ty);
+
+  function step(ts){
+    if(!startTime) startTime = ts;
+    const t    = ease(Math.min((ts - startTime)/duration, 1));
+    const dist = totalLen * t;
+    const pt   = phantom.getPointAtLength(dist);
+    const ptN  = phantom.getPointAtLength(Math.min(totalLen, dist + totalLen*0.02));
+    const dx = ptN.x - pt.x, dy = ptN.y - pt.y;
+    if(Math.abs(dx) > 0.01 || Math.abs(dy) > 0.01)
+      lastAngle = Math.atan2(dy, dx) * 180 / Math.PI;
+
+    // Flip figure left/right based on direction
+    const scaleX = (lastAngle > 90 || lastAngle < -90) ? -1 : 1;
+    pedEl.setAttribute('transform',
+      `translate(${pt.x.toFixed(1)} ${pt.y.toFixed(1)}) scale(${scaleX},1)`);
+
+    animateLegs(pedParts, true);
+
+    if(t < 1){
+      pedAnimId = requestAnimationFrame(step);
+    } else {
+      // Arrived at building
+      animateLegs(pedParts, false);
+      pedEl.setAttribute('transform', `translate(${tx} ${ty})`);
+      if(phantom.parentNode) phantom.parentNode.removeChild(phantom);
+
+      // Arrival burst
+      playTone(880,'sine',0.08,0.12);
+      setTimeout(()=>playTone(1100,'sine',0.06,0.1), 100);
+
+      // Footsteps fade
+      setTimeout(()=>{ if(footTrail.parentNode) footTrail.parentNode.removeChild(footTrail); }, 1500);
+
+      // Shrink figure into building (walk-in animation)
+      let shrinkStart = null;
+      function shrink(ts2){
+        if(!shrinkStart) shrinkStart = ts2;
+        const s = 1 - Math.min((ts2-shrinkStart)/400, 1);
+        pedEl.setAttribute('transform', `translate(${tx} ${ty}) scale(${s})`);
+        if(s > 0) requestAnimationFrame(shrink);
+        else {
+          if(pedEl.parentNode) pedEl.parentNode.removeChild(pedEl);
+          pedEl = null;
+        }
+      }
+      setTimeout(()=> requestAnimationFrame(shrink), 600);
+
+      document.getElementById('infobox').innerHTML =
+        `<strong>🏢 Arrived at ${building.name}</strong><br>` +
+        `<span style="color:#60a5fa;font-weight:600">${pedName||'You'} has entered the building</span><br>` +
+        `<span style="color:#64748b;font-size:10px">Walk time: ~${Math.round(duration/1000)}s</span>`;
+    }
+  }
+  pedAnimId = requestAnimationFrame(step);
+}
+
+// ── Zoom to show both start + end of pedestrian walk ──────────────────────
+function smoothZoomToRegion(x1, y1, x2, y2){
+  const pad = 60;
+  const minX = Math.min(x1,x2)-pad, minY = Math.min(y1,y2)-pad;
+  const maxX = Math.max(x1,x2)+pad, maxY = Math.max(y1,y2)+pad;
+  const targetW = maxX-minX, targetH = maxY-minY;
+  const targetX = minX, targetY = minY;
+  const fromX=vx,fromY=vy,fromW=vw,fromH=vh;
+  const duration=600; let startTime=null;
+  if(zoomAnimId){ cancelAnimationFrame(zoomAnimId); zoomAnimId=null; }
+  function ease(t){ return t<0.5?2*t*t:-1+(4-2*t)*t; }
+  function step(ts){
+    if(!startTime) startTime=ts;
+    const t=ease(Math.min((ts-startTime)/duration,1));
+    vx=fromX+(targetX-fromX)*t; vy=fromY+(targetY-fromY)*t;
+    vw=fromW+(targetW-fromW)*t; vh=fromH+(targetH-fromH)*t;
+    svg.setAttribute('viewBox',`${vx} ${vy} ${vw} ${vh}`);
+    if(t<1) zoomAnimId=requestAnimationFrame(step); else zoomAnimId=null;
+  }
+  zoomAnimId=requestAnimationFrame(step);
+}
+
+// Cancel pedestrian walk if user clears
+const _origClearAll = clearAll;
+clearAll = function(){
+  hideBuildingTargets();
+  if(pedAnimId){ cancelAnimationFrame(pedAnimId); pedAnimId=null; }
+  if(pedEl && pedEl.parentNode){ pedEl.parentNode.removeChild(pedEl); pedEl=null; }
+  pedLayer.innerHTML='';
+  _origClearAll();
+};
+
+// ── Sound Engine (Web Audio API) ─────────────────────────────────────────────
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+let audioCtx = null;
+function getAudioCtx(){
+  if(!audioCtx) audioCtx = new AudioCtx();
+  return audioCtx;
+}
+
+function playTone(freq, type, duration, vol=0.18, fadeOut=true){
+  try {
+    const ctx = getAudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.type = type; osc.frequency.value = freq;
+    gain.gain.setValueAtTime(vol, ctx.currentTime);
+    if(fadeOut) gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + duration);
+  } catch(e){}
+}
+
+function soundClick(){  playTone(880, 'sine', 0.08, 0.12); }
+function soundPath(){   playTone(660, 'sine', 0.12, 0.14); setTimeout(()=>playTone(880,'sine',0.1,0.12), 120); }
+function soundOccupy(){ playTone(440,'triangle',0.08,0.2); setTimeout(()=>playTone(330,'triangle',0.12,0.18),100); setTimeout(()=>playTone(220,'triangle',0.18,0.22),220); }
+function soundReserve(){ playTone(780,'sine',0.07,0.15); setTimeout(()=>playTone(980,'sine',0.09,0.12),90); }
+function soundDriver(){ playTone(520,'square',0.05,0.07); }
+
+// ── Other Drivers System ──────────────────────────────────────────────────────
+const DRIVER_COLORS = ['#e91e63','#9c27b0','#ff5722','#00bcd4','#8bc34a','#ff9800'];
+const DRIVER_NAMES  = ['Alex','Maya','Ravi','Sofia','James','Priya'];
+
+const driversLayer = document.getElementById('drivers-layer');
+let otherDrivers = []; // {id, name, color, spotId, carEl, animId, phase}
+
+function createDriverCarEl(color){
+  const g = document.createElementNS(NS,'g');
+  g.setAttribute('visibility','hidden');
+  // Body
+  const body = document.createElementNS(NS,'rect');
+  body.setAttribute('x','-7'); body.setAttribute('y','-4');
+  body.setAttribute('width','14'); body.setAttribute('height','8');
+  body.setAttribute('rx','2.5'); body.setAttribute('fill',color);
+  body.setAttribute('stroke','#222'); body.setAttribute('stroke-width','1');
+  // Cabin
+  const cab = document.createElementNS(NS,'rect');
+  cab.setAttribute('x','-4'); cab.setAttribute('y','-7');
+  cab.setAttribute('width','8'); cab.setAttribute('height','5');
+  cab.setAttribute('rx','1.5'); cab.setAttribute('fill',color);
+  cab.setAttribute('stroke','#222'); cab.setAttribute('stroke-width','0.8');
+  // Headlights
+  const hl1 = document.createElementNS(NS,'circle'); hl1.setAttribute('cx','7'); hl1.setAttribute('cy','-2'); hl1.setAttribute('r','1.2'); hl1.setAttribute('fill','#fff'); hl1.setAttribute('opacity','0.9');
+  const hl2 = document.createElementNS(NS,'circle'); hl2.setAttribute('cx','7'); hl2.setAttribute('cy','2');  hl2.setAttribute('r','1.2'); hl2.setAttribute('fill','#fff'); hl2.setAttribute('opacity','0.9');
+  // Taillights
+  const tl1 = document.createElementNS(NS,'circle'); tl1.setAttribute('cx','-7'); tl1.setAttribute('cy','-2'); tl1.setAttribute('r','1'); tl1.setAttribute('fill','#f44'); tl1.setAttribute('opacity','0.85');
+  const tl2 = document.createElementNS(NS,'circle'); tl2.setAttribute('cx','-7'); tl2.setAttribute('cy','2');  tl2.setAttribute('r','1'); tl2.setAttribute('fill','#f44'); tl2.setAttribute('opacity','0.85');
+  // Name label
+  const lbl = document.createElementNS(NS,'text');
+  lbl.setAttribute('y','-10'); lbl.setAttribute('text-anchor','middle');
+  lbl.setAttribute('font-size','7'); lbl.setAttribute('font-weight','600');
+  lbl.setAttribute('fill',color); lbl.setAttribute('font-family','sans-serif');
+  lbl.setAttribute('pointer-events','none');
+  lbl.setAttribute('stroke','#fff'); lbl.setAttribute('stroke-width','2.5'); lbl.setAttribute('paint-order','stroke');
+  [body,cab,hl1,hl2,tl1,tl2,lbl].forEach(el=>g.appendChild(el));
+  return {g, lbl};
+}
+
+function spawnDriver(driverIdx){
+  const color = DRIVER_COLORS[driverIdx % DRIVER_COLORS.length];
+  const name  = DRIVER_NAMES[driverIdx % DRIVER_NAMES.length];
+  const {g, lbl} = createDriverCarEl(color);
+  lbl.textContent = name;
+  driversLayer.appendChild(g);
+
+  const driver = {id: driverIdx, name, color, spotId: null, carEl: g, animId: null, phase:'idle'};
+  otherDrivers.push(driver);
+  driveToRandomFreeSpot(driver);
+}
+
+function driveToRandomFreeSpot(driver){
+  // Pick a random free, non-reserved spot not already targeted by another driver
+  const targeted = new Set(otherDrivers.filter(d=>d.id!==driver.id && d.spotId!==null).map(d=>d.spotId));
+  const candidates = spots.filter(s=> s.available && !s.reserved && !targeted.has(s.id));
+  if(!candidates.length){ driver.phase='idle'; return; }
+
+  const target = candidates[Math.floor(Math.random()*candidates.length)];
+  driver.spotId = target.id;
+  driver.phase  = 'driving';
+
+  // Reserve the spot (yellow)
+  target.reserved = true;
+  drawSpots(); updateSidebar(); updateDriversPanel();
+  soundReserve();
+
+  // Build a path from a random road edge
+  const startX = V_ROADS_X[Math.floor(Math.random()*V_ROADS_X.length)];
+  const startY = H_ROADS_Y[Math.floor(Math.random()*H_ROADS_Y.length)];
+  const fromSnap = {snapX: startX, snapY: startY, roadType:'h', roadVal: startY};
+  const toSnap   = spotRoadCenter(target);
+  const pts = buildRoadPath(fromSnap, toSnap);
+  const d   = buildSmoothPath(pts);
+
+  // Invisible path for animation
+  const phantom = document.createElementNS(NS,'path');
+  phantom.setAttribute('d', d); phantom.setAttribute('fill','none'); phantom.setAttribute('stroke','none');
+  driversLayer.appendChild(phantom);
+
+  driver.carEl.setAttribute('visibility','visible');
+  const totalLen = phantom.getTotalLength();
+  const duration = Math.min(5000, Math.max(1800, totalLen * 6));
+  function ease(t){ return t<0.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2; }
+  let startTime = null, lastAngle = 0;
+
+  function step(ts){
+    if(!startTime) startTime = ts;
+    const prog = ease(Math.min((ts-startTime)/duration, 1));
+    const dist = totalLen * prog;
+    const pt   = phantom.getPointAtLength(dist);
+    const ptN  = phantom.getPointAtLength(Math.min(totalLen, dist + totalLen*0.015));
+    const dx = ptN.x-pt.x, dy = ptN.y-pt.y;
+    if(Math.abs(dx)>0.01||Math.abs(dy)>0.01) lastAngle = Math.atan2(dy,dx)*180/Math.PI;
+    driver.carEl.setAttribute('transform',`translate(${pt.x.toFixed(1)} ${pt.y.toFixed(1)}) rotate(${lastAngle.toFixed(1)})`);
+
+    if(prog < 1){
+      driver.animId = requestAnimationFrame(step);
+    } else {
+      // Arrived — mark spot occupied, hide car after pause
+      driversLayer.removeChild(phantom);
+      driver.phase = 'parked';
+      target.reserved = false;
+      target.available = false;
+      drawSpots(); updateSidebar(); updateDriversPanel();
+      soundDriver();
+      // After random interval, driver leaves and spot frees
+      const stayMs = 8000 + Math.random()*12000;
+      setTimeout(()=>{
+        target.available = true;
+        driver.carEl.setAttribute('visibility','hidden');
+        driver.spotId = null;
+        driver.phase  = 'idle';
+        drawSpots(); updateSidebar(); updateDriversPanel();
+        // Drive again after a short delay
+        setTimeout(()=>driveToRandomFreeSpot(driver), 2000 + Math.random()*3000);
+      }, stayMs);
+    }
+  }
+  driver.animId = requestAnimationFrame(step);
+}
+
+function updateDriversPanel(){
+  const list = document.getElementById('drivers-list');
+  list.innerHTML = '';
+  otherDrivers.forEach(d=>{
+    const spot = spots.find(s=>s.id===d.spotId);
+    const phaseLabel = d.phase==='driving' ? `→ ${spot?.label||'?'}` : d.phase==='parked' ? spot?.label||'?' : '—';
+    const row = document.createElement('div');
+    row.className = 'driver-row';
+    row.innerHTML = `
+      <div class="driver-dot" style="background:${d.color};color:${d.color}"></div>
+      <span>${d.name}</span>
+      <span class="driver-status ${d.phase}">${d.phase==='driving'?'▶ '+phaseLabel : d.phase==='parked'?'P '+phaseLabel : 'idle'}</span>`;
+    list.appendChild(row);
+  });
+  if(!otherDrivers.length){
+    list.innerHTML = '<div style="font-size:11px;color:var(--text3)">No drivers yet…</div>';
+  }
+}
+
+// Spawn 3 other drivers at staggered intervals
+setTimeout(()=>spawnDriver(0), 1200);
+setTimeout(()=>spawnDriver(1), 3500);
+setTimeout(()=>spawnDriver(2), 5800);
+
+// ── Wire sound into existing actions ─────────────────────────────────────────
+// Patch handleSpotClick to play sound
+const _origHandleSpotClick = handleSpotClick;
+handleSpotClick = function(id){
+  soundClick();
+  _origHandleSpotClick(id);
+};
+
+// Patch drawRoadPath to play path sound (do it after path is drawn)
+const _origDrawRoadPath = drawRoadPath;
+drawRoadPath = function(pts){
+  _origDrawRoadPath(pts);
+  soundPath();
+};
+
+// ── Simulation ───────────────────────────────────────────────────────────────
+setInterval(()=>{
+  const n=1+Math.floor(Math.random()*2);
+  const used=new Set();
+  const flippable = spots.filter(s=>!s.reserved).map(s=>s.id);
+  for(let i=0;i<n && i<flippable.length;i++){
+    let idx; do{idx=Math.floor(Math.random()*flippable.length);}while(used.has(idx));
+    used.add(idx);
+    const s = spots.find(p=>p.id===flippable[idx]);
+    if(s) s.available = !s.available;
+  }
+  drawSpots();
+  updateSidebar();
+  if(selectedId!==null){
+    const s=spots.find(p=>p.id===selectedId);
+    if(s){
+      document.getElementById('infobox').innerHTML=
+        `<strong>Spot ${s.label}</strong><br>` +
+        `Status: <span style="color:${s.reserved?'#f59e0b':s.available?'#22c55e':'#ef4444'};font-weight:500">${s.reserved?'Reserved':s.available?'Available':'Occupied'}</span>`;
+    }
+  }
+},3000);
+
+// Zoom + pan
+let vx=0,vy=0,vw=900,vh=720;
+let dragging=false,lastX=0,lastY=0;
+const mapWrap = document.getElementById('map-container');
+
+mapWrap.addEventListener('wheel',e=>{
+  e.preventDefault();
+  const scale=e.deltaY<0?0.85:1/0.85;
+  const rect=svg.getBoundingClientRect();
+  const mx=(e.clientX-rect.left)/rect.width*vw+vx;
+  const my=(e.clientY-rect.top)/rect.height*vh+vy;
+  vw*=scale; vh*=scale;
+  vx=mx-(e.clientX-rect.left)/rect.width*vw;
+  vy=my-(e.clientY-rect.top)/rect.height*vh;
+  vw=Math.max(200,Math.min(1800,vw));
+  vh=Math.max(160,Math.min(1440,vh));
+  svg.setAttribute('viewBox',`${vx} ${vy} ${vw} ${vh}`);
+},{passive:false});
+
+svg.addEventListener('mousedown',e=>{dragging=true;lastX=e.clientX;lastY=e.clientY;});
+window.addEventListener('mouseup',()=>dragging=false);
+window.addEventListener('mousemove',e=>{
+  if(!dragging) return;
+  const rect=svg.getBoundingClientRect();
+  const dx=(e.clientX-lastX)/rect.width*vw;
+  const dy=(e.clientY-lastY)/rect.height*vh;
+  vx-=dx; vy-=dy; lastX=e.clientX; lastY=e.clientY;
+  svg.setAttribute('viewBox',`${vx} ${vy} ${vw} ${vh}`);
+});
+
+// ── Smooth animated zoom-to-spot ─────────────────────────────────────────────
+let zoomAnimId = null;
+
+function smoothZoomToSpot(s){
+  const cx = s.x + s.w / 2;
+  const cy = s.y + s.h / 2;
+
+  // Target viewBox: zoom in to ~200×160 window centered on spot
+  const targetW = 260, targetH = 210;
+  const targetX = cx - targetW / 2;
+  const targetY = cy - targetH / 2;
+
+  const fromX = vx, fromY = vy, fromW = vw, fromH = vh;
+  const duration = 520;
+  let startTime = null;
+
+  if(zoomAnimId){ cancelAnimationFrame(zoomAnimId); zoomAnimId = null; }
+
+  function ease(t){ return t < 0.5 ? 2*t*t : -1+(4-2*t)*t; }
+
+  function step(ts){
+    if(!startTime) startTime = ts;
+    const t = ease(Math.min((ts - startTime) / duration, 1));
+    vx = fromX + (targetX - fromX) * t;
+    vy = fromY + (targetY - fromY) * t;
+    vw = fromW + (targetW - fromW) * t;
+    vh = fromH + (targetH - fromH) * t;
+    svg.setAttribute('viewBox', `${vx} ${vy} ${vw} ${vh}`);
+    if(t < 1) zoomAnimId = requestAnimationFrame(step);
+    else zoomAnimId = null;
+  }
+  zoomAnimId = requestAnimationFrame(step);
+}
+
+// ── Countdown ticker: redraw every second so timers update ───────────────────
+setInterval(()=>{
+  const now = Date.now();
+  let changed = false;
+  spots.forEach(s=>{
+    if(s.expiresAt && !s.available && !s.reserved){
+      if(now >= s.expiresAt){
+        // Session expired — free the spot
+        s.available = true;
+        s.expiresAt = null;
+        s.occupiedName = null;
+        changed = true;
+      }
+    }
+  });
+  // Always redraw to tick timers; updateSidebar only if occupancy changed
+  drawSpots();
+  if(changed) updateSidebar();
+}, 1000);
+
+// Initial
+drawSpots();
+updateSidebar();
+</script>
+</body>
+</html>
